@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   title: "StickerCanvas — Put stuff together. Make something good.",
   description:
     "Drag in stickers, photos, screenshots, and whatever else you've got. Move them around until it feels right.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+  },
 };
 
 export default function RootLayout({
