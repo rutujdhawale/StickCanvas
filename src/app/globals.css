@@ -1,26 +1,81 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --bg: #F7F6F2;
+  --ink: #171717;
+  --secondary: #6F6F6A;
+  --border: #D9D8D2;
+  --canvas: #ECEBE6;
+  --tomato: #FF5A36;
+  --blue: #4A6CFF;
+  --yellow: #F4C84A;
+  --green: #69A875;
+  --pink: #E98BAA;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-handwriting {
+  font-family: var(--font-handwriting), "Caveat", cursive, sans-serif;
+}
+
+/* Subtle physical paper texture simulation */
+.paper-bg {
+  background-color: var(--canvas);
+  background-image: radial-gradient(#d5d4ce 0.75px, transparent 0.75px);
+  background-size: 20px 20px;
+}
+
+/* Three stacked rectangles brand logo mark */
+.logo-mark {
+  display: inline-flex;
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+.logo-mark span {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  background: white;
+}
+.logo-mark span:nth-child(1) { top: 0; left: 0; }
+.logo-mark span:nth-child(2) { top: 3px; left: 4px; background: var(--bg); }
+.logo-mark span:nth-child(3) { top: 6px; left: 8px; background: var(--tomato); border-color: var(--tomato); }
+
+/* Minimalist scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D9D8D2;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B5B4AE;
+}
+
+/* Checkered background for transparent previews */
+.checkerboard {
+  background-color: #ffffff;
+  background-image: linear-gradient(45deg, #f0f0ee 25%, transparent 25%),
+    linear-gradient(-45deg, #f0f0ee 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f0f0ee 75%),
+    linear-gradient(-45deg, transparent 75%, #f0f0ee 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
 }

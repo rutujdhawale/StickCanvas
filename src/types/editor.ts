@@ -17,6 +17,9 @@ export interface StickerObject {
   flipY: boolean;
   locked: boolean;
   visible: boolean;
+  borderWidth?: number; // 0 or undefined = no border
+  borderColor?: string; // default "#ffffff"
+  hasShadow?: boolean; // physical elevation shadow
 }
 
 export interface Asset {
@@ -29,13 +32,38 @@ export interface Asset {
   type: "emoji" | "upload" | "paste";
 }
 
+// ─── Background Types ───────────────────────────────────────────
+
+export type BackgroundType = "solid" | "gradient" | "image" | "transparent";
+
+export interface BackgroundGradient {
+  from: string;
+  to: string;
+  angle: number; // degrees (0, 45, 90, 135, 180, etc.)
+}
+
+export interface BackgroundImageConfig {
+  src: string;
+  opacity: number; // 0–1
+  blur: number; // 0–20px
+}
+
+export interface CanvasBackgroundConfig {
+  type: BackgroundType;
+  color: string; // solid color or fallback
+  gradient?: BackgroundGradient;
+  image?: BackgroundImageConfig;
+  pattern?: "none" | "dots" | "grid";
+}
+
 // ─── Editor State ───────────────────────────────────────────────
 
 export interface DocumentState {
   projectName: string;
   canvasWidth: number;
   canvasHeight: number;
-  backgroundColor: string;
+  backgroundColor: string; // backward-compatibility
+  backgroundConfig: CanvasBackgroundConfig;
   objects: StickerObject[];
 }
 
