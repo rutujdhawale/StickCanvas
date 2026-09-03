@@ -210,3 +210,168 @@ export function downloadArtwork(dataUrl: string, filename: string) {
   link.click();
   document.body.removeChild(link);
 }
+
+export interface PrintSheetOptions {
+  paperFormat: "a4" | "letter" | "4x6" | "square";
+  orientation: "portrait" | "landscape";
+  showCutGuides: boolean;
+  paperFinish: "glossy-vinyl" | "matte" | "clear-vinyl";
+}
+
+export const PAPER_SIZES_300DPI: Record<
+  PrintSheetOptions["paperFormat"],
+  { width: number; height: number; label: string; dimensions: string }
+> = {
+  a4: { width: 2480, height: 3508, label: "A4", dimensions: "210 × 297 mm" },
+  letter: { width: 2550, height: 3300, label: "US Letter", dimensions: "8.5 × 11 in" },
+  "4x6": { width: 1200, height: 1800, label: "4×6 Photo Card", dimensions: "4 × 6 in" },
+  square: { width: 1800, height: 1800, label: "6×6 Square Sheet", dimensions: "152 × 152 mm" },
+};
+
+/**
+ * Generate a 300 DPI printer-ready sticker sheet with optional cut guides
+ */
+export async function exportPrintSheet(
+  objects: StickerObject[],
+  assets: Asset[],
+  printOptions: PrintSheetOptions,
+  canvasWidth = 1920,
+  canvasHeight = 1080,
+  backgroundConfig?: CanvasBackgroundConfig
+): Promise<{ dataUrl: string; filename: string; width: number; height: number }> {
+  const baseSize = PAPER_SIZES_300DPI[printOptions.paperFormat];
+  const isLandscape = printOptions.orientation === "landscape";
+  const pageWidth = isLandscape ? Math.max(baseSize.width, baseSize.height) : Math.min(baseSize.width, baseSize.height);
+  const pageHeight = isLandscape ? Math.min(baseSize.width, baseSize.height) : Math.max(baseSize.width, baseSize.height);
+
+  const sheetCanvas = document.createElement("canvas");
+  sheetCanvas.width = pageWidth;
+  sheetCanvas.height = pageHeight;
+  const ctx = sheetCanvas.getContext("2d");
+  if (!ctx) throw new Error("Could not create print canvas context");
+
+  // Pure white sticker backing paper
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, pageWidth, pageHeight);
+
+  // Safe printable area margins (6% border margin)
+  const marginX = pageWidth * 0.05;
+  const marginY = pageHeight * 0.05;
+  const printableW = pageWidth - marginX * 2;
+  const printableH = pageHeight - marginY * 2;
+
+  // Scale canvas content to fit printable area while preserving aspect ratio
+  const scale = Math.min(printableW / canvasWidth, printableH / canvasHeight);
+  const contentW = canvasWidth * scale;
+  const contentH = canvasHeight * scale;
+  const offsetX = marginX + (printableW - contentW) / 2;
+  const offsetY = marginY + (printableH - contentH) / 2;
+
+  // Render canvas content
+  const { dataUrl: canvasDataUrl } = await exportArtwork(
+    objects,
+    assets,
+    { format: "png", scale: 2, transparent: true },
+    canvasWidth,
+    canvasHeight,
+    "#FFFFFF",
+    backgroundConfig
+  );
+
+  const contentImg = new Image();
+  await new Promise<void>((resolve) => {
+    contentImg.onload = () => resolve();
+    contentImg.onerror = () => resolve();
+    contentImg.src = canvasDataUrl;
+  });
+
+  ctx.drawImage(contentImg, offsetX, offsetY, contentW, contentH);
+
+  // Draw optional scissor cut-guides around individual stickers
+  if (printOptions.showCutGuides) {
+    ctx.save();
+    ctx.strokeStyle = "#B3B2AC";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
+
+    for (const obj of objects) {
+      if (!obj.visible || obj.opacity <= 0) continue;
+      const ox = offsetX + obj.x * scale;
+      const oy = offsetY + obj.y * scale;
+      const ow = (obj.width * scale * Math.abs(obj.scaleX)) + 16;
+      const oh = (obj.height * scale * Math.abs(obj.scaleY)) + 16;
+
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.rotate((obj.rotation * Math.PI) / 180);
+      ctx.strokeRect(-ow / 2, -oh / 2, ow, oh);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // Subtle header footer print alignment marks
+  ctx.fillStyle = "#A8A7A1";
+  ctx.font = "bold 20px monospace";
+  ctx.fillText(`StickerCanvas · ${baseSize.label} (${baseSize.dimensions}) · 300 DPI`, marginX, pageHeight - marginY * 0.4);
+
+  const dataUrl = sheetCanvas.toDataURL("image/png");
+  const filename = `stickercanvas-print-sheet-${printOptions.paperFormat}-${printOptions.orientation}.png`;
+
+  return { dataUrl, filename, width: pageWidth, height: pageHeight };
+}
+
+/**
+ * Direct browser print triggering system printer dialog at full paper resolution
+ */
+export function printStickerSheet(dataUrl: string, printOptions: PrintSheetOptions) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    // Fallback: download the sheet
+    downloadArtwork(dataUrl, `stickercanvas-sheet-${printOptions.paperFormat}.png`);
+    return;
+  }
+
+  const paperSize = printOptions.paperFormat === "4x6" ? "4in 6in" : printOptions.paperFormat;
+  const orientation = printOptions.orientation;
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>StickerCanvas Print Sheet</title>
+        <style>
+          @page {
+            size: ${paperSize} ${orientation};
+            margin: 0;
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            width: 100vw;
+            height: 100vh;
+          }
+          img {
+            max-width: 100vw;
+            max-height: 100vh;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+        </style>
+      </head>
+      <body>
+        <img src="${dataUrl}" onload="window.focus(); window.print(); window.close();" />
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
