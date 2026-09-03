@@ -9,9 +9,10 @@ import { PRESET_STICKERS } from "@/lib/emoji-stickers";
 
 interface AssetsPanelProps {
   onAddStickerDirectly: (asset: Asset) => void;
+  onAddPhotoDirectly?: (dataUrl: string, name: string) => void;
 }
 
-export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddStickerDirectly }) => {
+export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddStickerDirectly, onAddPhotoDirectly }) => {
   const { assets, addAsset } = useEditorStore();
   const { assetsPanelOpen, toggleAssetsPanel, openStickerMaker, openAssetPreview } = useUIStore();
   const [search, setSearch] = useState("");
@@ -44,8 +45,11 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddStickerDirectly }
         if (!dataUrl) return;
 
         const cleanName = file.name.replace(/\.[^/.]+$/, "");
-        // Open the Add & Customize Sticker modal with live preview and transparency slider
-        openStickerMaker(dataUrl, cleanName);
+        if (onAddPhotoDirectly) {
+          onAddPhotoDirectly(dataUrl, cleanName);
+        } else {
+          openStickerMaker(dataUrl, cleanName);
+        }
       };
       reader.readAsDataURL(file);
     });

@@ -14,6 +14,8 @@ import {
   RotateCw,
   FlipHorizontal,
   FlipVertical,
+  Scissors,
+  Wand2,
 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
@@ -34,7 +36,7 @@ export const InspectorPanel: React.FC = () => {
     pushHistory,
   } = useEditorStore();
 
-  const { inspectorPanelOpen, toggleInspectorPanel } = useUIStore();
+  const { inspectorPanelOpen, toggleInspectorPanel, openStickerMaker } = useUIStore();
   const [lockRatio, setLockRatio] = useState(true);
   const [tab, setTab] = useState<"object" | "canvas">("object");
 
@@ -43,6 +45,7 @@ export const InspectorPanel: React.FC = () => {
   const selectedObj = document.objects.find((o) => selectedIds.includes(o.id));
   const currentTab = selectedObj ? tab : "canvas";
   const assetMap = new Map(assets.map((a) => [a.id, a]));
+  const selectedAsset = selectedObj ? assetMap.get(selectedObj.assetId) : undefined;
 
   // Layers list sorted with highest z-index on top
   const layers = [...document.objects].sort((a, b) => b.zIndex - a.zIndex);
@@ -438,6 +441,31 @@ export const InspectorPanel: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* ─── Sticker Cutout Section ─── */}
+            {selectedAsset && (selectedAsset.type === "upload" || selectedAsset.type === "paste") && (
+              <div className="pt-3 border-t border-[#D9D8D2] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-[#171717] flex items-center gap-1.5">
+                    <Scissors size={13} className="text-[#FF5A36]" />
+                    Sticker Cutout
+                  </span>
+                  <span className="text-[10px] text-[#2E7D32] font-semibold bg-[#E8F5E9] px-2 py-0.5 rounded-full border border-[#C8E6C9]">
+                    Auto-Cutout Active ✓
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6F6F6A] leading-relaxed">
+                  Smart boundary eraser extracted this subject and softened edges.
+                </p>
+                <button
+                  onClick={() => openStickerMaker(selectedAsset.src, selectedObj.name)}
+                  className="w-full py-1.5 px-2.5 bg-white hover:bg-[#ECEBE6] text-[#171717] border border-[#D9D8D2] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 shadow-2xs transition-colors active:scale-98"
+                >
+                  <Wand2 size={13} className="text-[#FF5A36]" />
+                  <span>Fine-Tune Cutout / Eraser</span>
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="p-4 text-center">

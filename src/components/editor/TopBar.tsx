@@ -2,11 +2,15 @@
 
 import React, { useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Undo2, Redo2, Download, Layers, Sparkles, Paintbrush, FilePlus } from "lucide-react";
+import { ArrowLeft, Undo2, Redo2, Download, Layers, Sparkles, Paintbrush, FilePlus, Clipboard } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
 
-export const TopBar: React.FC = () => {
+interface TopBarProps {
+  onPasteClipboard?: () => void;
+}
+
+export const TopBar: React.FC<TopBarProps> = ({ onPasteClipboard }) => {
   const { document, setProjectName, undo, redo, canUndo, canRedo, resetProject } = useEditorStore();
   const {
     openExportModal,
@@ -69,6 +73,18 @@ export const TopBar: React.FC = () => {
           <Sparkles size={14} />
           <span>Stickers</span>
         </button>
+
+        {/* Paste button from clipboard */}
+        {onPasteClipboard && (
+          <button
+            onClick={onPasteClipboard}
+            className="px-2.5 py-1 text-xs font-medium rounded-md border border-transparent text-[#6F6F6A] hover:text-[#171717] hover:bg-[#ECEBE6] transition-colors flex items-center gap-1.5"
+            title="Paste image from clipboard (Ctrl+V)"
+          >
+            <Clipboard size={14} className="text-[#4A6CFF]" />
+            <span className="hidden md:inline">Paste</span>
+          </button>
+        )}
 
         {/* Background toggle */}
         <button

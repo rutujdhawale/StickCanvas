@@ -107,8 +107,11 @@ export const StickerMakerModal: React.FC<StickerMakerModalProps> = ({ onStickerC
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white border border-[#D9D8D2] rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white border border-[#D9D8D2] rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in slide-in-from-bottom-6 sm:zoom-in-95 duration-150 flex flex-col max-h-[92vh] sm:max-h-[90vh]">
+        {/* Mobile pull handle */}
+        <div className="sm:hidden w-12 h-1.5 bg-[#D9D8D2] rounded-full mx-auto mt-2.5 mb-0.5" />
+
         {/* Header */}
         <div className="p-4 border-b border-[#D9D8D2] flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -117,10 +120,10 @@ export const StickerMakerModal: React.FC<StickerMakerModalProps> = ({ onStickerC
             </div>
             <div>
               <h2 className="font-semibold text-sm tracking-tight text-[#171717]">
-                Add & Customize Sticker
+                Refine Sticker Cutout
               </h2>
               <p className="text-[11px] text-[#6F6F6A]">
-                Preview, adjust transparency, and refine edges before placing
+                Preview, adjust transparency, and refine edges
               </p>
             </div>
           </div>
@@ -133,9 +136,9 @@ export const StickerMakerModal: React.FC<StickerMakerModalProps> = ({ onStickerC
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
           {/* Mode Switcher */}
-          <div className="flex bg-[#ECEBE6] p-1 rounded-xl gap-1">
+          <div className="flex items-center gap-1 bg-[#ECEBE6] p-1 rounded-xl">
             <button
               onClick={() => setMode("cutout")}
               className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
@@ -243,6 +246,26 @@ export const StickerMakerModal: React.FC<StickerMakerModalProps> = ({ onStickerC
                 onChange={(e) => setTolerance(Number(e.target.value))}
                 className="w-full accent-[#171717] cursor-pointer"
               />
+              {/* Quick thumb-friendly presets */}
+              <div className="flex gap-1.5 pt-1">
+                {[
+                  { label: "Soft Edge", val: 22 },
+                  { label: "Optimal Auto ✨", val: 32 },
+                  { label: "Deep Cut", val: 48 },
+                ].map((preset) => (
+                  <button
+                    key={preset.val}
+                    onClick={() => setTolerance(preset.val)}
+                    className={`flex-1 py-1.5 text-[11px] rounded-lg border font-medium transition-all ${
+                      tolerance === preset.val
+                        ? "bg-[#171717] text-white border-[#171717] shadow-2xs font-semibold"
+                        : "bg-white text-[#6F6F6A] border-[#D9D8D2] hover:text-[#171717] hover:bg-[#FAF9F5]"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
               <p className="text-[11px] text-[#6F6F6A]">
                 Higher tolerance removes more background; lower tolerance protects similar foreground colors.
               </p>

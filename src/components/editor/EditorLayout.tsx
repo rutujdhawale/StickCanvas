@@ -14,6 +14,7 @@ import { useEditorStore, generateId, generateAssetId } from "@/store/editorStore
 import { useUIStore } from "@/store/uiStore";
 import { Asset, StickerObject } from "@/types/editor";
 import { EditorEngine } from "@/engine/EditorEngine";
+import { smartAutoCreateSticker } from "@/lib/bg-remove";
 
 import { AssetPreviewModal } from "./AssetPreviewModal";
 import { MobileBottomBar } from "./MobileBottomBar";
@@ -46,9 +47,9 @@ export const EditorLayout: React.FC = () => {
     });
   }, [loadSavedArtwork, showToast]);
 
-  // Helper to add sticker directly to center or specific position with custom opacity
+  // Helper to add sticker directly to center or specific position with custom opacity and border
   const handleAddStickerDirectly = useCallback(
-    (asset: Asset, initialOpacity = 1, initialX?: number, initialY?: number) => {
+    (asset: Asset, initialOpacity = 1, initialX?: number, initialY?: number, defaultBorder = 6) => {
       let posX = initialX ?? document.canvasWidth / 2;
       let posY = initialY ?? document.canvasHeight / 2;
 
@@ -84,6 +85,9 @@ export const EditorLayout: React.FC = () => {
         flipY: false,
         locked: false,
         visible: true,
+        borderWidth: defaultBorder,
+        borderColor: "#ffffff",
+        hasShadow: defaultBorder > 0,
       };
 
       addObject(newObj);
@@ -91,6 +95,45 @@ export const EditorLayout: React.FC = () => {
       pushHistory();
     },
     [document.canvasWidth, document.canvasHeight, document.objects.length, addObject, select, pushHistory]
+  );
+
+  // 1-step smart auto sticker creator from any image source (paste, drop, device camera)
+  const handleAutoCreateAndAddSticker = useCallback(
+    async (dataUrl: string, name = "Custom Sticker", initialX?: number, initialY?: number) => {
+      showToast("✨ Auto-creating sticker…");
+      try {
+        const { stickerUrl, naturalWidth, naturalHeight } = await smartAutoCreateSticker(dataUrl);
+
+        const asset: Asset = {
+          id: generateAssetId(),
+          name,
+          src: stickerUrl,
+          thumbnailSrc: stickerUrl,
+          originalWidth: naturalWidth,
+          originalHeight: naturalHeight,
+          type: "upload",
+        };
+
+        addAsset(asset);
+        handleAddStickerDirectly(asset, 1, initialX, initialY, 6);
+        showToast("✨ Sticker added! Adjust opacity & border in panel ✓");
+      } catch (err) {
+        console.error("Auto sticker creation fallback:", err);
+        const fallbackAsset: Asset = {
+          id: generateAssetId(),
+          name,
+          src: dataUrl,
+          thumbnailSrc: dataUrl,
+          originalWidth: 300,
+          originalHeight: 300,
+          type: "upload",
+        };
+        addAsset(fallbackAsset);
+        handleAddStickerDirectly(fallbackAsset, 1, initialX, initialY, 0);
+        showToast("Added image to canvas ✓");
+      }
+    },
+    [addAsset, handleAddStickerDirectly, showToast]
   );
 
   // Handle system clipboard paste of images
@@ -115,31 +158,12 @@ export const EditorLayout: React.FC = () => {
           return;
         }
 
-        // If it's already a transparent PNG, add it directly or prompt "Make sticker"
-        if (blob.type === "image/png") {
-          const img = new Image();
-          img.onload = () => {
-            const asset: Asset = {
-              id: generateAssetId(),
-              name: "Pasted Image",
-              src: dataUrl,
-              thumbnailSrc: dataUrl,
-              originalWidth: img.width,
-              originalHeight: img.height,
-              type: "paste",
-            };
-            addAsset(asset);
-            handleAddStickerDirectly(asset);
-          };
-          img.src = dataUrl;
-        } else {
-          // Open "Make it a sticker" background remover
-          openStickerMaker(dataUrl);
-        }
+        // Directly auto-convert pasted image into a sticker
+        handleAutoCreateAndAddSticker(dataUrl, "Pasted Sticker");
       };
       reader.readAsDataURL(blob);
     },
-    [addAsset, handleAddStickerDirectly, openStickerMaker, backgroundDrawerOpen, setBackgroundConfig, showToast]
+    [backgroundDrawerOpen, setBackgroundConfig, showToast, handleAutoCreateAndAddSticker]
   );
 
   // Set up keyboard shortcuts & global paste
@@ -153,23 +177,74 @@ export const EditorLayout: React.FC = () => {
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       if (dataUrl) {
-        openStickerMaker(dataUrl, file.name.replace(/\.[^/.]+$/, ""));
+        handleAutoCreateAndAddSticker(dataUrl, file.name.replace(/\.[^/.]+$/, ""));
       }
     };
     reader.readAsDataURL(file);
   };
 
+  // Browser Async Clipboard API for mobile and touch devices
+  const handlePasteFromClipboard = useCallback(async () => {
+    try {
+      if (!navigator.clipboard?.read) {
+        showToast("Clipboard not supported. Tap Device to select a photo!");
+        return;
+      }
+
+      showToast("Reading clipboard…");
+      const items = await navigator.clipboard.read();
+      let foundImage = false;
+
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith("image/"));
+        if (imageType) {
+          foundImage = true;
+          const blob = await item.getType(imageType);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const dataUrl = e.target?.result as string;
+            if (dataUrl) {
+              handleAutoCreateAndAddSticker(dataUrl, "Pasted Sticker");
+            }
+          };
+          reader.readAsDataURL(blob);
+          break;
+        }
+      }
+
+      if (!foundImage) {
+        showToast("No image in clipboard. Copy a photo first!");
+      }
+    } catch (err: any) {
+      console.warn("Clipboard read error:", err);
+      if (err?.name === "NotAllowedError") {
+        showToast("Clipboard permission needed to paste photos.");
+      } else {
+        showToast("Copy an image first, or tap Device to select a photo!");
+      }
+    }
+  }, [handleAutoCreateAndAddSticker, showToast]);
+
   return (
     <div className="h-screen w-screen flex flex-col bg-[#F7F6F2] overflow-hidden select-none">
-      <TopBar />
+      <TopBar onPasteClipboard={handlePasteFromClipboard} />
       <div className="flex-1 flex overflow-hidden relative">
-        <AssetsPanel onAddStickerDirectly={handleAddStickerDirectly} />
-        <CanvasViewport onEngineReady={(engine) => (engineRef.current = engine)} />
+        <AssetsPanel
+          onAddStickerDirectly={handleAddStickerDirectly}
+          onAddPhotoDirectly={handleAutoCreateAndAddSticker}
+        />
+        <CanvasViewport
+          onEngineReady={(engine) => (engineRef.current = engine)}
+          onDropImage={handleAutoCreateAndAddSticker}
+        />
         <InspectorPanel />
       </div>
 
       {/* Mobile touch navigation dock */}
-      <MobileBottomBar onAddFromDevice={handleAddFromDevice} />
+      <MobileBottomBar
+        onAddFromDevice={handleAddFromDevice}
+        onPasteFromClipboard={handlePasteFromClipboard}
+      />
 
       {/* Dedicated Background Drawer (Mobile bottom sheet / Desktop flyout) */}
       {backgroundDrawerOpen && (
@@ -193,4 +268,4 @@ export const EditorLayout: React.FC = () => {
       <Toast />
     </div>
   );
-  };
+};

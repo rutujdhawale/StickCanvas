@@ -10,9 +10,10 @@ import { getDefaultAssets } from "@/lib/emoji-stickers";
 
 interface CanvasViewportProps {
   onEngineReady?: (engine: EditorEngine) => void;
+  onDropImage?: (dataUrl: string, name: string, worldX?: number, worldY?: number) => void;
 }
 
-export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady }) => {
+export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, onDropImage }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<EditorEngine | null>(null);
 
@@ -160,6 +161,8 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady })
     // 2. Check if external files were dropped from device / desktop
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
+      const world = engineRef.current ? engineRef.current.screenToCanvas(e.clientX, e.clientY) : undefined;
+
       Array.from(files).forEach((file) => {
         if (!file.type.startsWith("image/")) return;
 
@@ -169,8 +172,16 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady })
           if (!dataUrl) return;
 
           const cleanName = file.name.replace(/\.[^/.]+$/, "");
-          // Open the Add & Customize Sticker modal with live preview, transparency, and cutout
-          openStickerMaker(dataUrl, cleanName);
+          if (onDropImage) {
+            onDropImage(
+              dataUrl,
+              cleanName,
+              world ? Math.round(world.x) : undefined,
+              world ? Math.round(world.y) : undefined
+            );
+          } else {
+            openStickerMaker(dataUrl, cleanName);
+          }
         };
         reader.readAsDataURL(file);
       });

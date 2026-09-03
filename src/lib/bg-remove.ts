@@ -1,8 +1,8 @@
 // Client-side smart background removal & sticker styling
-// Supports transparency tuning, tolerance adjustment, edge feathering, and die-cut borders
+// Features multi-point corner sampling, adaptive auto-sensitivity, anti-aliased edge smoothing, and die-cut borders
 
 export interface BgRemovalOptions {
-  tolerance: number; // 0 to 100
+  tolerance?: number; // 0 to 100 or undefined for auto-detection
   feather?: number; // feather border radius in pixels (0 to 5)
   removeBg?: boolean; // whether to perform bg removal
   opacity?: number; // 0 to 1
@@ -10,9 +10,12 @@ export interface BgRemovalOptions {
   borderWidth?: number; // border thickness in px
 }
 
+/**
+ * Remove background from an image using multi-seed flood fill and adaptive auto-tolerance
+ */
 export function removeBackgroundFromImage(
   imageElement: HTMLImageElement,
-  options: BgRemovalOptions = { tolerance: 30, feather: 1, removeBg: true, opacity: 1, addStickerBorder: false }
+  options: BgRemovalOptions = { removeBg: true, opacity: 1, addStickerBorder: false }
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
@@ -38,112 +41,160 @@ export function removeBackgroundFromImage(
       const data = imgData.data;
 
       if (options.removeBg !== false) {
-        // 1. Sample perimeter border pixels around the original image bounds
-        const sampleColors: [number, number, number][] = [];
-        const step = Math.max(1, Math.floor((origW + origH) / 200));
+        // Step 1: Check if already transparent (>4% transparent perimeter pixels)
+        let transparentPerimeterCount = 0;
+        let totalSampled = 0;
+        const step = Math.max(1, Math.floor((origW + origH) / 100));
 
         for (let x = pad; x < pad + origW; x += step) {
-          const topIdx = (pad * width + x) * 4;
-          const btmIdx = ((pad + origH - 1) * width + x) * 4;
-          sampleColors.push([data[topIdx], data[topIdx + 1], data[topIdx + 2]]);
-          sampleColors.push([data[btmIdx], data[btmIdx + 1], data[btmIdx + 2]]);
-        }
-        for (let y = pad; y < pad + origH; y += step) {
-          const leftIdx = (y * width + pad) * 4;
-          const rightIdx = (y * width + (pad + origW - 1)) * 4;
-          sampleColors.push([data[leftIdx], data[leftIdx + 1], data[leftIdx + 2]]);
-          sampleColors.push([data[rightIdx], data[rightIdx + 1], data[rightIdx + 2]]);
+          const topA = data[(pad * width + x) * 4 + 3];
+          const btmA = data[((pad + origH - 1) * width + x) * 4 + 3];
+          if (topA < 30) transparentPerimeterCount++;
+          if (btmA < 30) transparentPerimeterCount++;
+          totalSampled += 2;
         }
 
-        // Average background color
-        let avgR = 0, avgG = 0, avgB = 0;
-        for (const [r, g, b] of sampleColors) {
-          avgR += r;
-          avgG += g;
-          avgB += b;
-        }
-        avgR = Math.round(avgR / Math.max(1, sampleColors.length));
-        avgG = Math.round(avgG / Math.max(1, sampleColors.length));
-        avgB = Math.round(avgB / Math.max(1, sampleColors.length));
+        // If it's already an alpha-cutout sticker (like PNG with transparency), keep original cutout!
+        const alreadyTransparent = totalSampled > 0 && transparentPerimeterCount / totalSampled > 0.05;
 
-        // 2. Tolerance mapping
-        const maxDistance = 441.67;
-        const threshold = (options.tolerance / 100) * (maxDistance * 0.7);
+        if (!alreadyTransparent) {
+          // Step 2: Multi-seed perimeter sampling (Corners & Border edges)
+          const cornerSeeds: [number, number, number][] = [];
+          const perimeterSamples: [number, number, number][] = [];
 
-        // 3. Flood-fill from borders
-        const visited = new Uint8Array(width * height);
-        const queue: number[] = [];
+          // Corner clusters (top-left, top-right, bottom-left, bottom-right)
+          const cornerOffsets = [
+            [pad, pad],
+            [pad + origW - 1, pad],
+            [pad, pad + origH - 1],
+            [pad + origW - 1, pad + origH - 1],
+          ];
 
-        for (let x = 0; x < width; x++) {
-          queue.push(x, 0);
-          queue.push(x, height - 1);
-          visited[x] = 1;
-          visited[(height - 1) * width + x] = 1;
-        }
-        for (let y = 1; y < height - 1; y++) {
-          queue.push(0, y);
-          queue.push(width - 1, y);
-          visited[y * width] = 1;
-          visited[y * width + (width - 1)] = 1;
-        }
+          for (const [cx, cy] of cornerOffsets) {
+            const idx = (cy * width + cx) * 4;
+            cornerSeeds.push([data[idx], data[idx + 1], data[idx + 2]]);
+          }
 
-        function colorDistance(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number) {
-          const dr = r1 - r2;
-          const dg = g1 - g2;
-          const db = b1 - b2;
-          return Math.sqrt(dr * dr + dg * dg + db * db);
-        }
+          // Sample perimeter borders
+          for (let x = pad; x < pad + origW; x += step) {
+            const tIdx = (pad * width + x) * 4;
+            const bIdx = ((pad + origH - 1) * width + x) * 4;
+            perimeterSamples.push([data[tIdx], data[tIdx + 1], data[tIdx + 2]]);
+            perimeterSamples.push([data[bIdx], data[bIdx + 1], data[bIdx + 2]]);
+          }
+          for (let y = pad; y < pad + origH; y += step) {
+            const lIdx = (y * width + pad) * 4;
+            const rIdx = (y * width + (pad + origW - 1)) * 4;
+            perimeterSamples.push([data[lIdx], data[lIdx + 1], data[lIdx + 2]]);
+            perimeterSamples.push([data[rIdx], data[rIdx + 1], data[rIdx + 2]]);
+          }
 
-        let head = 0;
-        while (head < queue.length) {
-          const x = queue[head++];
-          const y = queue[head++];
-          const idx = (y * width + x) * 4;
+          // Step 3: Compute Adaptive Auto-Tolerance if not explicitly provided
+          let effectiveTolerance = options.tolerance;
+          if (effectiveTolerance === undefined || effectiveTolerance === null) {
+            // Measure color variance across perimeter
+            let meanR = 0, meanG = 0, meanB = 0;
+            for (const [r, g, b] of perimeterSamples) {
+              meanR += r; meanG += g; meanB += b;
+            }
+            meanR /= perimeterSamples.length;
+            meanG /= perimeterSamples.length;
+            meanB /= perimeterSamples.length;
 
-          const r = data[idx];
-          const g = data[idx + 1];
-          const b = data[idx + 2];
-          const a = data[idx + 3];
+            let variance = 0;
+            for (const [r, g, b] of perimeterSamples) {
+              variance += Math.sqrt((r - meanR) ** 2 + (g - meanG) ** 2 + (b - meanB) ** 2);
+            }
+            const avgDev = variance / perimeterSamples.length;
 
-          // If outside original image padding, it's transparent
-          const isOutsideOrig = x < pad || x >= pad + origW || y < pad || y >= pad + origH;
+            // Clean solid/studio backdrops get tight precision (28–34); gradients/complex backdrops get adaptive range
+            effectiveTolerance = avgDev < 15 ? 30 : avgDev < 35 ? 36 : 42;
+          }
 
-          if (isOutsideOrig || a === 0 || colorDistance(r, g, b, avgR, avgG, avgB) <= threshold) {
-            data[idx + 3] = 0;
+          const maxDistance = 441.67; // sqrt(255^2 * 3)
+          const threshold = (effectiveTolerance / 100) * (maxDistance * 0.7);
 
-            const neighbors = [
-              [x + 1, y],
-              [x - 1, y],
-              [x, y + 1],
-              [x, y - 1],
-            ];
+          // Step 4: Multi-seed Flood-Fill from Canvas Outer Boundaries
+          const visited = new Uint8Array(width * height);
+          const queue: number[] = [];
 
-            for (const [nx, ny] of neighbors) {
-              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                const nCoord = ny * width + nx;
-                if (visited[nCoord] === 0) {
-                  visited[nCoord] = 1;
-                  queue.push(nx, ny);
+          // Seed entire outer perimeter of the canvas
+          for (let x = 0; x < width; x++) {
+            queue.push(x, 0);
+            queue.push(x, height - 1);
+            visited[x] = 1;
+            visited[(height - 1) * width + x] = 1;
+          }
+          for (let y = 1; y < height - 1; y++) {
+            queue.push(0, y);
+            queue.push(width - 1, y);
+            visited[y * width] = 1;
+            visited[y * width + (width - 1)] = 1;
+          }
+
+          function minDistanceToSeeds(r: number, g: number, b: number) {
+            let minD = Infinity;
+            for (const [sr, sg, sb] of cornerSeeds) {
+              const d = Math.sqrt((r - sr) ** 2 + (g - sg) ** 2 + (b - sb) ** 2);
+              if (d < minD) minD = d;
+            }
+            return minD;
+          }
+
+          let head = 0;
+          while (head < queue.length) {
+            const x = queue[head++];
+            const y = queue[head++];
+            const idx = (y * width + x) * 4;
+
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const a = data[idx + 3];
+
+            const isOutsideOrig = x < pad || x >= pad + origW || y < pad || y >= pad + origH;
+
+            // Match if transparent, outside pad, or within color threshold of any background corner seed
+            if (isOutsideOrig || a === 0 || minDistanceToSeeds(r, g, b) <= threshold) {
+              data[idx + 3] = 0;
+
+              const neighbors = [
+                [x + 1, y],
+                [x - 1, y],
+                [x, y + 1],
+                [x, y - 1],
+              ];
+
+              for (const [nx, ny] of neighbors) {
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                  const nCoord = ny * width + nx;
+                  if (visited[nCoord] === 0) {
+                    visited[nCoord] = 1;
+                    queue.push(nx, ny);
+                  }
                 }
               }
             }
           }
-        }
 
-        // Feathering
-        if ((options.feather ?? 1) > 0) {
-          for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-              const idx = (y * width + x) * 4;
-              if (data[idx + 3] > 0) {
-                const hasTransparentNeighbor =
-                  data[((y - 1) * width + x) * 4 + 3] === 0 ||
-                  data[((y + 1) * width + x) * 4 + 3] === 0 ||
-                  data[(y * width + (x - 1)) * 4 + 3] === 0 ||
-                  data[(y * width + (x + 1)) * 4 + 3] === 0;
+          // Step 5: Smooth Alpha Feathering on Cutout Edges (Anti-Aliasing)
+          const featherRadius = options.feather ?? 1.5;
+          if (featherRadius > 0) {
+            for (let y = 1; y < height - 1; y++) {
+              for (let x = 1; x < width - 1; x++) {
+                const idx = (y * width + x) * 4;
+                if (data[idx + 3] > 0) {
+                  // Count transparent direct neighbors
+                  let transparentCount = 0;
+                  if (data[((y - 1) * width + x) * 4 + 3] === 0) transparentCount++;
+                  if (data[((y + 1) * width + x) * 4 + 3] === 0) transparentCount++;
+                  if (data[(y * width + (x - 1)) * 4 + 3] === 0) transparentCount++;
+                  if (data[(y * width + (x + 1)) * 4 + 3] === 0) transparentCount++;
 
-                if (hasTransparentNeighbor) {
-                  data[idx + 3] = Math.round(data[idx + 3] * 0.7);
+                  if (transparentCount > 0) {
+                    // Soften edge transition proportionally
+                    data[idx + 3] = Math.round(data[idx + 3] * (1 - transparentCount * 0.18));
+                  }
                 }
               }
             }
@@ -151,7 +202,7 @@ export function removeBackgroundFromImage(
         }
       }
 
-      // 4. Apply overall transparency adjustment
+      // Step 6: Apply overall transparency/opacity
       const opacity = Math.max(0.05, Math.min(1, options.opacity ?? 1));
       if (opacity < 1) {
         for (let i = 3; i < data.length; i += 4) {
@@ -163,7 +214,7 @@ export function removeBackgroundFromImage(
 
       ctx.putImageData(imgData, 0, 0);
 
-      // 5. Die-cut Sticker White Border (if enabled)
+      // Step 7: Apply Die-Cut Vinyl Sticker Border & Elevation Shadow (if requested)
       if (options.addStickerBorder) {
         const borderCanvas = document.createElement("canvas");
         borderCanvas.width = width;
@@ -171,11 +222,11 @@ export function removeBackgroundFromImage(
         const bCtx = borderCanvas.getContext("2d");
         if (bCtx) {
           const bw = options.borderWidth || 8;
-          bCtx.shadowColor = "rgba(0, 0, 0, 0.15)";
+          bCtx.shadowColor = "rgba(0, 0, 0, 0.16)";
           bCtx.shadowBlur = 6;
           bCtx.shadowOffsetY = 3;
 
-          // Draw outline in multiple directions for clean outline
+          // Radial dilation for uniform rounded border
           for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
             const ox = Math.cos(angle) * bw;
             const oy = Math.sin(angle) * bw;
@@ -185,7 +236,7 @@ export function removeBackgroundFromImage(
           bCtx.fillStyle = "#ffffff";
           bCtx.fillRect(0, 0, width, height);
 
-          // Place original cutout on top of the white border
+          // Place original cutout cleanly on top
           bCtx.globalCompositeOperation = "source-over";
           bCtx.shadowColor = "transparent";
           bCtx.drawImage(canvas, 0, 0);
@@ -201,3 +252,34 @@ export function removeBackgroundFromImage(
     }
   });
 }
+
+/**
+ * Direct 1-step smart sticker creation from any image dataUrl or image file
+ */
+export async function smartAutoCreateSticker(
+  dataUrl: string,
+  options?: Partial<BgRemovalOptions>
+): Promise<{ stickerUrl: string; naturalWidth: number; naturalHeight: number }> {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = (e) => reject(e);
+    img.src = dataUrl;
+  });
+
+  const stickerUrl = await removeBackgroundFromImage(img, {
+    removeBg: true,
+    opacity: 1,
+    addStickerBorder: false, // The editor's native WebGL border/shadow handles border dynamically in Inspector!
+    ...options,
+  });
+
+  return {
+    stickerUrl,
+    naturalWidth: img.naturalWidth || img.width || 300,
+    naturalHeight: img.naturalHeight || img.height || 300,
+  };
+}
+

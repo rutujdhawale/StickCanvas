@@ -1,15 +1,19 @@
 "use client";
 
 import React, { useRef } from "react";
-import { Plus, Sparkles, Sliders, Layers, Download, Laptop, Camera, Paintbrush } from "lucide-react";
+import { Plus, Clipboard, Sparkles, Sliders, Layers, Download, Paintbrush } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
 
 interface MobileBottomBarProps {
   onAddFromDevice: (file: File) => void;
+  onPasteFromClipboard?: () => void;
 }
 
-export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({ onAddFromDevice }) => {
+export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
+  onAddFromDevice,
+  onPasteFromClipboard,
+}) => {
   const { selectedIds } = useEditorStore();
   const {
     toggleAssetsPanel,
@@ -52,6 +56,16 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({ onAddFromDevic
       >
         <Plus size={18} strokeWidth={2.5} className="text-[#FF5A36]" />
         <span className="text-[10px] font-semibold mt-0.5">Device</span>
+      </button>
+
+      {/* 2. Paste From Clipboard (Mobile Clipboard API) */}
+      <button
+        onClick={onPasteFromClipboard}
+        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 text-[#171717] hover:bg-[#ECEBE6] rounded-xl active:scale-95 transition-all"
+        title="Paste copied photo from clipboard"
+      >
+        <Clipboard size={18} strokeWidth={2} className="text-[#4A6CFF]" />
+        <span className="text-[10px] font-semibold mt-0.5">Paste</span>
       </button>
 
       {/* 2. Stickers Drawer */}
