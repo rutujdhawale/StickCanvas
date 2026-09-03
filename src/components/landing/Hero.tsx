@@ -22,7 +22,8 @@ const GithubIcon = ({ size = 16 }: { size?: number }) => (
 
 interface HeroSticker {
   id: string;
-  emoji: string;
+  emoji?: string;
+  imageUrl?: string;
   name: string;
   x: number;
   y: number;
@@ -31,13 +32,14 @@ interface HeroSticker {
 }
 
 const INITIAL_STICKERS: HeroSticker[] = [
-  { id: "1", emoji: "🐱", name: "Orange Cat", x: 120, y: 80, rotation: -12, scale: 1.1 },
-  { id: "2", emoji: "🍓", name: "Strawberry", x: 340, y: 160, rotation: 18, scale: 1.2 },
-  { id: "3", emoji: "🌸", name: "Cherry Blossom", x: 220, y: 220, rotation: -6, scale: 1 },
-  { id: "4", emoji: "🎧", name: "Studio Cans", x: 480, y: 90, rotation: 14, scale: 1.15 },
-  { id: "5", emoji: "⭐", name: "Sparkle Star", x: 260, y: 40, rotation: 25, scale: 0.9 },
-  { id: "6", emoji: "📷", name: "Film Camera", x: 80, y: 260, rotation: 8, scale: 1.1 },
-  { id: "7", emoji: "🍵", name: "Matcha", x: 420, y: 250, rotation: -15, scale: 1.05 },
+  { id: "1", imageUrl: "/stickers/diet-coke.png", name: "Diet Coke", x: 60, y: 30, rotation: -6, scale: 1.15 },
+  { id: "2", imageUrl: "/stickers/matcha.png", name: "Iced Matcha", x: 220, y: 40, rotation: 8, scale: 1.1 },
+  { id: "3", emoji: "🐱", name: "Orange Cat", x: 380, y: 50, rotation: -14, scale: 1.1 },
+  { id: "4", emoji: "🍓", name: "Strawberry", x: 100, y: 200, rotation: 16, scale: 1.15 },
+  { id: "5", emoji: "🎧", name: "Studio Cans", x: 440, y: 170, rotation: 12, scale: 1.1 },
+  { id: "6", emoji: "⭐", name: "Sparkle Star", x: 250, y: 190, rotation: 22, scale: 0.95 },
+  { id: "7", emoji: "📷", name: "Film Camera", x: 340, y: 230, rotation: -6, scale: 1.05 },
+  { id: "8", emoji: "🌸", name: "Cherry Blossom", x: 470, y: 25, rotation: 15, scale: 0.9 },
 ];
 
 export const Hero: React.FC = () => {
@@ -165,9 +167,20 @@ export const Hero: React.FC = () => {
                     transform: `translate3d(${s.x}px, ${s.y}px, 0) rotate(${s.rotation}deg) scale(${s.scale})`,
                     cursor: activeId === s.id ? "grabbing" : "grab",
                   }}
-                  className="absolute text-5xl sm:text-6xl select-none filter drop-shadow-sm hover:scale-110 active:scale-125 transition-transform duration-100 ease-out"
+                  className="absolute select-none hover:scale-110 active:scale-125 transition-transform duration-100 ease-out flex items-center justify-center cursor-grab"
                 >
-                  {s.emoji}
+                  {s.imageUrl ? (
+                    <img
+                      src={s.imageUrl}
+                      alt={s.name}
+                      draggable={false}
+                      className="w-20 h-20 sm:w-24 sm:h-24 object-contain pointer-events-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.16)] select-none"
+                    />
+                  ) : (
+                    <span className="text-5xl sm:text-6xl filter drop-shadow-[0_3px_6px_rgba(0,0,0,0.12)] select-none">
+                      {s.emoji}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

@@ -29,8 +29,10 @@ export const PRESET_STICKERS: PresetSticker[] = [
   { id: "sticker_palette", name: "Paint Palette", emoji: "🎨", category: "stationery" },
 
   // Food & Cafe
+  { id: "sticker_matcha", name: "Iced Matcha", emoji: "🍵", category: "food" },
+  { id: "sticker_diet_coke", name: "Diet Coke", emoji: "🥤", category: "food" },
   { id: "sticker_strawberry", name: "Strawberry", emoji: "🍓", category: "food" },
-  { id: "sticker_coffee", name: "Matcha Latte", emoji: "☕", category: "food" },
+  { id: "sticker_coffee", name: "Coffee Cup", emoji: "☕", category: "food" },
   { id: "sticker_onigiri", name: "Onigiri", emoji: "🍙", category: "food" },
   { id: "sticker_croissant", name: "Croissant", emoji: "🥐", category: "food" },
   { id: "sticker_donut", name: "Sprinkle Donut", emoji: "🍩", category: "food" },
