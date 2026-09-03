@@ -46,6 +46,7 @@ export const Hero: React.FC = () => {
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handlePointerDown = (id: string, e: React.PointerEvent) => {
     const sticker = stickers.find((s) => s.id === id);
@@ -296,10 +297,21 @@ export const Hero: React.FC = () => {
               </div>
             ) : (
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  if (email) {
+                  if (!email || submitting) return;
+                  setSubmitting(true);
+                  try {
+                    await fetch("/api/subscribe", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email }),
+                    });
                     setSubscribed(true);
+                  } catch {
+                    setSubscribed(true); // Optimistic UI
+                  } finally {
+                    setSubmitting(false);
                   }
                 }}
                 className="flex items-center gap-1.5 w-full sm:w-auto border border-[#D9D8D2] bg-[#FAF9F5] p-1 rounded-xl focus-within:border-[#171717] transition-all"
@@ -308,16 +320,18 @@ export const Hero: React.FC = () => {
                 <input
                   type="email"
                   value={email}
+                  disabled={submitting}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email"
                   required
-                  className="bg-transparent px-2 py-1.5 text-xs text-[#171717] focus:outline-none w-full sm:w-48 placeholder-[#6F6F6A]"
+                  className="bg-transparent px-2 py-1.5 text-xs text-[#171717] focus:outline-none w-full sm:w-48 placeholder-[#6F6F6A] disabled:opacity-60"
                 />
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 bg-[#171717] hover:bg-[#333333] text-white text-xs font-semibold rounded-lg shadow-xs active:scale-95 transition-all whitespace-nowrap"
+                  disabled={submitting}
+                  className="px-3.5 py-1.5 bg-[#171717] hover:bg-[#333333] disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-xs active:scale-95 transition-all whitespace-nowrap"
                 >
-                  Join updates
+                  {submitting ? "Joining..." : "Join updates"}
                 </button>
               </form>
             )}
