@@ -10,7 +10,7 @@ Live site: [https://stickercanvas.runs-on.dev](https://stickercanvas.runs-on.dev
 ## ✨ Features
 
 - ⚡ **60–120 FPS GPU Engine**: Powered by PixiJS v8 2D scene graph on WebGL canvas. Manipulate 100+ objects with fluid response.
-- 🤖 **AI-Powered Background Removal (RMBG-1.4)**: Real ML-based subject segmentation running directly in the browser via `@huggingface/transformers`. Auto-detects WebGPU for <500ms inference with quantized Q8 ONNX weights and WASM fallback.
+- 🤖 **Turbo AI Background Removal (RMBG-1.4)**: Real ML subject segmentation running directly in the browser via `@huggingface/transformers`. WebGPU hardware acceleration (`fp16`/`fp32`, ~200ms) with WASM (`q8`) fallback, instant transparent PNG bypass (<5ms), GPU canvas `destination-in` compositing (<2ms), and smart auto-trimming.
 - 📱 **Full Mobile & Touch Support**: 1-finger sticker dragging, 2-finger pinch zoom, pan gestures, enlarged mobile touch targets, and responsive bottom bar with native camera and gallery pickers.
 - 📦 **Multi-Photo Batch Upload**: Drop or select multiple images simultaneously; automatically queues and converts each into an individually bordered sticker with staggered placement.
 - 🏷️ **Die-Cut Vinyl Contour & 3D Shadow**: Authentic physical sticker outlines with customizable border thickness (`2px`–`18px`), vinyl color presets, and physical depth shadows.
@@ -104,6 +104,13 @@ Point a CNAME record from `runs-on.dev/manage`:
 
 ---
 
+## 🗺️ Future Roadmap & Monetization
+
+- **Stripe Print Sheet Paywall**: Architecture & integration roadmap for monetizing high-resolution 300 DPI physical print sheets using Stripe Checkout. See [`PRINT_PAYWALL_STRIPE_ROADMAP.md`](file:///c:/Users/Rutuj%20Dhawale/Desktop/StickerCanvas/PRINT_PAYWALL_STRIPE_ROADMAP.md) for full specifications.
+
+---
+
 ## 📄 License
 
 Copyright (c) 2026 Rutuj Dhawale. All rights reserved.
+

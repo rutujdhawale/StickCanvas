@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useRef } from "react";
-import { Plus, Clipboard, Sparkles, Sliders, Download, Paintbrush, Camera } from "lucide-react";
+import { Plus, Clipboard, Sparkles, Sliders, Download, Paintbrush, Camera, CheckSquare } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
 
 interface MobileBottomBarProps {
   onAddFromDevice: (file: File) => void;
+  onAddMultipleFiles?: (files: File[]) => void;
   onPasteFromClipboard?: () => void;
 }
 
 export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
   onAddFromDevice,
+  onAddMultipleFiles,
   onPasteFromClipboard,
 }) => {
   const { selectedIds } = useEditorStore();
@@ -19,6 +21,8 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
     toggleAssetsPanel,
     toggleInspectorPanel,
     toggleBackgroundDrawer,
+    toggleMultiSelectMode,
+    isMultiSelectMode,
     assetsPanelOpen,
     inspectorPanelOpen,
     backgroundDrawerOpen,
@@ -30,12 +34,13 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files) {
-      Array.from(files).forEach((file) => {
-        if (file.type.startsWith("image/")) {
-          onAddFromDevice(file);
-        }
-      });
+    if (files && files.length > 0) {
+      const valid = Array.from(files).filter((file) => file.type.startsWith("image/"));
+      if (onAddMultipleFiles) {
+        onAddMultipleFiles(valid);
+      } else {
+        valid.forEach((file) => onAddFromDevice(file));
+      }
       e.target.value = "";
     }
   };
@@ -92,7 +97,23 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
         <span className="text-[10px] font-semibold mt-0.5">Paste</span>
       </button>
 
-      {/* 4. Stickers Drawer */}
+      {/* 4. Multi-Select Toggle */}
+      <button
+        onClick={toggleMultiSelectMode}
+        className={`flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 rounded-xl active:scale-95 transition-all relative ${
+          isMultiSelectMode
+            ? "bg-[#4A6CFF] text-white font-semibold shadow-xs"
+            : "text-[#6F6F6A] hover:text-[#171717]"
+        }`}
+        title={isMultiSelectMode ? "Multi-select ON (tap stickers to select)" : "Enable multi-select mode"}
+      >
+        <CheckSquare size={18} strokeWidth={2} />
+        <span className="text-[10px] mt-0.5">
+          {selectedIds.length > 1 ? `${selectedIds.length} Sel` : "Multi"}
+        </span>
+      </button>
+
+      {/* 5. Stickers Drawer */}
       <button
         onClick={toggleAssetsPanel}
         className={`flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 rounded-xl active:scale-95 transition-all ${

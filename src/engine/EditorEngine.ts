@@ -1,4 +1,4 @@
-import { FederatedPointerEvent } from "pixi.js";
+import { FederatedPointerEvent, Graphics } from "pixi.js";
 import { PixiApp } from "./PixiApp";
 import { SceneManager } from "./SceneManager";
 import { SelectionManager } from "./SelectionManager";
@@ -8,6 +8,7 @@ import { StickerObject, Asset, ViewportState, HandleDirection, CanvasBackgroundC
 
 export interface EditorEngineCallbacks {
   onSelect: (id: string, shiftKey: boolean) => void;
+  onSelectMultiple: (ids: string[]) => void;
   onDeselect: () => void;
   onUpdateObject: (id: string, patch: Partial<StickerObject>) => void;
   onCommitHistory: () => void;
@@ -22,12 +23,20 @@ export class EditorEngine {
   public selectionManager!: SelectionManager;
   public transformManager!: TransformManager;
   public viewportManager!: ViewportManager;
+  public marqueeGraphics!: import("pixi.js").Graphics;
 
   public containerElement: HTMLElement | null = null;
   private callbacks: EditorEngineCallbacks;
 
   private isSpaceDown = false;
   private isMiddleMouseDown = false;
+
+  // Marquee drag-box selection state
+  private isMarqueeActive = false;
+  private isMarqueeDragging = false;
+  private marqueeStart = { x: 0, y: 0 };
+  private marqueeShift = false;
+  private initialSelectedIds: string[] = [];
 
   constructor(callbacks: EditorEngineCallbacks) {
     this.callbacks = callbacks;
@@ -97,19 +106,29 @@ export class EditorEngine {
           const obj = this.findObjectById(id);
           if (obj) {
             const coords = getPointerCoords(e);
-            this.transformManager.startDrag(obj, coords.x, coords.y);
+            this.transformManager.startDrag(obj, coords.x, coords.y, this.getSelectedObjectsRef());
           }
         }
       }
     );
 
-    // Stage background click to deselect
+    // Initialize Marquee Graphics overlay
+    this.marqueeGraphics = new Graphics();
+    this.marqueeGraphics.eventMode = "none";
+    this.pixiApp.selectionContainer.addChild(this.marqueeGraphics);
+
+    // Stage background click & drag marquee box selection
     this.pixiApp.stage.on("pointerdown", (e: FederatedPointerEvent) => {
       const native = e.originalEvent as any;
       const isLeftOrTouch = e.pointerType === "touch" || native?.button === 0 || native?.button === undefined;
       if (isLeftOrTouch && !this.transformManager.isBusy() && !this.isSpaceDown) {
-        // If clicking canvas background, deselect
-        this.callbacks.onDeselect();
+        const coords = getPointerCoords(e);
+        const world = this.screenToCanvas(coords.x, coords.y);
+        this.isMarqueeActive = true;
+        this.isMarqueeDragging = false;
+        this.marqueeStart = { x: world.x, y: world.y };
+        this.marqueeShift = Boolean(e.shiftKey);
+        this.initialSelectedIds = [...this.selectedIds];
       }
     });
 
@@ -168,18 +187,89 @@ export class EditorEngine {
         this.viewportManager.handleTouchStart(e);
       }
     };
+    const handleMarqueeMove = (clientX: number, clientY: number) => {
+      const world = this.screenToCanvas(clientX, clientY);
+      const dx = world.x - this.marqueeStart.x;
+      const dy = world.y - this.marqueeStart.y;
+      if (Math.hypot(dx, dy) > 4) {
+        this.isMarqueeDragging = true;
+        const boxX = Math.min(this.marqueeStart.x, world.x);
+        const boxY = Math.min(this.marqueeStart.y, world.y);
+        const boxW = Math.abs(dx);
+        const boxH = Math.abs(dy);
+
+        const zoom = this.viewportManager.zoom;
+        this.marqueeGraphics
+          .clear()
+          .rect(boxX, boxY, boxW, boxH)
+          .fill({ color: 0x4a6cff, alpha: 0.12 })
+          .stroke({ color: 0x4a6cff, width: Math.max(1, 1.5 / zoom), alpha: 0.85 });
+
+        // Test intersection with all visible stickers
+        const matchedIds: string[] = [];
+        for (const obj of this.currentObjects) {
+          if (!obj.visible) continue;
+          const hw = obj.width / 2;
+          const hh = obj.height / 2;
+          const rad = (obj.rotation * Math.PI) / 180;
+          const cos = Math.abs(Math.cos(rad));
+          const sin = Math.abs(Math.sin(rad));
+          const aabbW = hw * cos + hh * sin;
+          const aabbH = hw * sin + hh * cos;
+          const sMinX = obj.x - aabbW;
+          const sMaxX = obj.x + aabbW;
+          const sMinY = obj.y - aabbH;
+          const sMaxY = obj.y + aabbH;
+
+          const intersects =
+            boxX <= sMaxX &&
+            boxX + boxW >= sMinX &&
+            boxY <= sMaxY &&
+            boxY + boxH >= sMinY;
+
+          if (intersects) {
+            matchedIds.push(obj.id);
+          }
+        }
+
+        const nextSelected = this.marqueeShift
+          ? Array.from(new Set([...this.initialSelectedIds, ...matchedIds]))
+          : matchedIds;
+
+        this.callbacks.onSelectMultiple(nextSelected);
+      }
+    };
+
+    const handleMarqueeUp = () => {
+      this.marqueeGraphics.clear();
+      if (!this.isMarqueeDragging) {
+        // Single click on background without dragging: deselect
+        this.callbacks.onDeselect();
+      }
+      this.isMarqueeActive = false;
+      this.isMarqueeDragging = false;
+    };
+
     const touchMoveHandler = (e: TouchEvent) => {
       if (e.touches.length === 2) {
         this.viewportManager.handleTouchMove(e);
-      } else if (e.touches.length === 1 && this.transformManager.isBusy()) {
-        e.preventDefault();
+      } else if (e.touches.length === 1) {
         const t = e.touches[0];
-        this.transformManager.handlePointerMove(t.clientX, t.clientY, false);
+        if (this.transformManager.isBusy()) {
+          e.preventDefault();
+          this.transformManager.handlePointerMove(t.clientX, t.clientY, false);
+        } else if (this.isMarqueeActive) {
+          e.preventDefault();
+          handleMarqueeMove(t.clientX, t.clientY);
+        }
       }
     };
     const touchEndHandler = (e: TouchEvent) => {
       if (e.touches.length < 2 && this.viewportManager.getIsPanning()) {
         this.viewportManager.handleTouchEnd(e);
+      }
+      if (this.isMarqueeActive) {
+        handleMarqueeUp();
       }
       if (this.transformManager.isBusy()) {
         this.transformManager.handlePointerUp();
@@ -197,6 +287,10 @@ export class EditorEngine {
         this.viewportManager.handlePanMove(e.clientX, e.clientY);
         return;
       }
+      if (this.isMarqueeActive) {
+        handleMarqueeMove(e.clientX, e.clientY);
+        return;
+      }
       this.transformManager.handlePointerMove(e.clientX, e.clientY, e.shiftKey);
     };
 
@@ -204,6 +298,9 @@ export class EditorEngine {
       if (this.viewportManager.getIsPanning()) {
         this.viewportManager.endPan();
         container.style.cursor = this.isSpaceDown ? "grab" : "default";
+      }
+      if (this.isMarqueeActive) {
+        handleMarqueeUp();
       }
       this.transformManager.handlePointerUp();
       const selectedObjs = this.getSelectedObjectsRef();

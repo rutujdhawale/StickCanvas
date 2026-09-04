@@ -19,6 +19,7 @@ export class TransformManager {
   // Drag initial state
   private startPointerWorld: { x: number; y: number } = { x: 0, y: 0 };
   private startObjectPos: { x: number; y: number } = { x: 0, y: 0 };
+  private startObjectPositions: Map<string, { x: number; y: number }> = new Map();
 
   // Resize initial state
   private startWidth = 0;
@@ -54,12 +55,25 @@ export class TransformManager {
     return { x: local.x, y: local.y };
   }
 
-  public startDrag(obj: StickerObject, globalX: number, globalY: number) {
+  public startDrag(
+    obj: StickerObject,
+    globalX: number,
+    globalY: number,
+    allSelected: StickerObject[] = [obj]
+  ) {
     if (obj.locked) return;
     this.activeMode = "drag";
     this.activeObjectId = obj.id;
     this.startPointerWorld = this.screenToWorld(globalX, globalY);
     this.startObjectPos = { x: obj.x, y: obj.y };
+
+    this.startObjectPositions.clear();
+    const group = allSelected.some((o) => o.id === obj.id) ? allSelected : [obj];
+    group.forEach((o) => {
+      if (!o.locked) {
+        this.startObjectPositions.set(o.id, { x: o.x, y: o.y });
+      }
+    });
   }
 
   public startResize(
@@ -120,21 +134,23 @@ export class TransformManager {
       const dx = worldPtr.x - this.startPointerWorld.x;
       const dy = worldPtr.y - this.startPointerWorld.y;
 
-      let newX = this.startObjectPos.x + dx;
-      let newY = this.startObjectPos.y + dy;
+      let effectiveDx = dx;
+      let effectiveDy = dy;
 
-      // Shift key locks axis to 45 deg or vertical/horizontal
-      if (shiftKey) {
+      // Shift key locks axis to 45 deg or vertical/horizontal if single object
+      if (shiftKey && this.startObjectPositions.size === 1) {
         if (Math.abs(dx) > Math.abs(dy)) {
-          newY = this.startObjectPos.y;
+          effectiveDy = 0;
         } else {
-          newX = this.startObjectPos.x;
+          effectiveDx = 0;
         }
       }
 
-      this.callbacks.onUpdate(this.activeObjectId, {
-        x: Math.round(newX),
-        y: Math.round(newY),
+      this.startObjectPositions.forEach((initPos, id) => {
+        this.callbacks.onUpdate(id, {
+          x: Math.round(initPos.x + effectiveDx),
+          y: Math.round(initPos.y + effectiveDy),
+        });
       });
     } else if (this.activeMode === "resize" && this.activeHandle) {
       // Vector from fixed opposite anchor to current mouse pointer in world space

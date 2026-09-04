@@ -26,8 +26,11 @@ interface UIState {
 
   // Active tool
   isPanning: boolean;
+  isMultiSelectMode: boolean;
 
   // ─── Actions ────────────────────────────────────────────────
+  toggleMultiSelectMode: () => void;
+  setMultiSelectMode: (v: boolean) => void;
   toggleAssetsPanel: () => void;
   toggleInspectorPanel: () => void;
   openBackgroundDrawer: () => void;
@@ -53,9 +56,12 @@ interface UIState {
   setIsPanning: (v: boolean) => void;
 }
 
+const isClient = typeof window !== "undefined";
+const isMobile = isClient && window.innerWidth < 768;
+
 export const useUIStore = create<UIState>((set) => ({
-  assetsPanelOpen: true,
-  inspectorPanelOpen: true,
+  assetsPanelOpen: !isMobile,
+  inspectorPanelOpen: !isMobile,
   backgroundDrawerOpen: false,
 
   exportModalOpen: false,
@@ -81,8 +87,13 @@ export const useUIStore = create<UIState>((set) => ({
   toastVisible: false,
 
   isPanning: false,
+  isMultiSelectMode: false,
 
   // ─── Actions ──────────────────────────────────────────────────
+
+  toggleMultiSelectMode: () =>
+    set((s) => ({ isMultiSelectMode: !s.isMultiSelectMode })),
+  setMultiSelectMode: (v: boolean) => set({ isMultiSelectMode: v }),
 
   toggleAssetsPanel: () =>
     set((s) => ({ assetsPanelOpen: !s.assetsPanelOpen })),

@@ -12,6 +12,7 @@ import {
   loadArtwork,
   clearArtwork,
   getFastCachedDocument,
+  getFastCachedAssets,
 } from "@/lib/storage";
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ const defaultDocument: DocumentState = {
 };
 
 const initialCached = getFastCachedDocument();
+const initialCachedAssets = getFastCachedAssets();
 let nextId = 1;
 if (initialCached?.objects) {
   const highestId = initialCached.objects.reduce((max, o) => {
@@ -59,6 +61,7 @@ interface EditorState {
   // Document
   document: DocumentState;
   assets: Asset[];
+  isHydrated: boolean;
 
   // Selection
   selectedIds: string[];
@@ -87,6 +90,7 @@ interface EditorState {
   // ─── Selection ──────────────────────────────────────────────
   select: (id: string) => void;
   selectMultiple: (ids: string[]) => void;
+  toggleSelect: (id: string) => void;
   selectAll: () => void;
   deselect: () => void;
 
@@ -130,8 +134,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // ─── Initial State ──────────────────────────────────────────
 
   document: initialCached || defaultDocument,
-
-  assets: [],
+  assets: initialCachedAssets || [],
+  isHydrated: false,
   selectedIds: [],
   viewport: { zoom: 1, panX: 0, panY: 0 },
   undoStack: [],
@@ -200,6 +204,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   select: (id) => set({ selectedIds: [id] }),
   selectMultiple: (ids) => set({ selectedIds: ids }),
+  toggleSelect: (id) =>
+    set((s) => {
+      const exists = s.selectedIds.includes(id);
+      return {
+        selectedIds: exists
+          ? s.selectedIds.filter((x) => x !== id)
+          : [...s.selectedIds, id],
+      };
+    }),
   selectAll: () =>
     set((s) => ({
       selectedIds: s.document.objects
@@ -408,10 +421,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (saved && saved.document) {
         set({
           document: saved.document,
-          assets: saved.assets || [],
+          assets: saved.assets && saved.assets.length > 0 ? saved.assets : get().assets,
           selectedIds: [],
           undoStack: [],
           redoStack: [],
+          isHydrated: true,
         });
 
         // Ensure nextId does not collide with loaded objects
@@ -428,6 +442,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     } catch (e) {
       console.warn("Failed to load saved artwork:", e);
     }
+    set({ isHydrated: true });
     return false;
   },
 
@@ -461,6 +476,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 // Automatically persist document and assets with debounced saves
 if (typeof window !== "undefined") {
   useEditorStore.subscribe((state, prevState) => {
+    // Prevent unhydrated store with empty assets from overwriting stored work
+    if (!state.isHydrated && state.assets.length === 0 && (initialCached?.objects?.length ?? 0) > 0) {
+      return;
+    }
     if (
       state.document !== prevState.document ||
       state.assets !== prevState.assets

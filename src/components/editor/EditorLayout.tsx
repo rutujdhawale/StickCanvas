@@ -42,10 +42,19 @@ export const EditorLayout: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStage, setProcessingStage] = useState("");
 
-  // Load persisted artwork on initial mount & preload ML model
+  // Load persisted artwork on initial mount, preload ML model & setup mobile view
   useEffect(() => {
     // Start preloading the AI background removal model in the background
     preloadModel();
+
+    // On mobile screens, ensure drawers start closed so user lands directly on canvas
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      useUIStore.setState({
+        inspectorPanelOpen: false,
+        assetsPanelOpen: false,
+        backgroundDrawerOpen: false,
+      });
+    }
 
     loadSavedArtwork().then((restored) => {
       if (restored) {
@@ -270,6 +279,37 @@ export const EditorLayout: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  // Batch add multiple files at once (from file picker or drag & drop)
+  const handleBatchAddFiles = useCallback(
+    async (files: FileList | File[], initialX?: number, initialY?: number) => {
+      const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+      if (imageFiles.length === 0) return;
+
+      totalInBatchRef.current += imageFiles.length;
+
+      for (const file of imageFiles) {
+        const dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve((e.target?.result as string) || "");
+          reader.onerror = () => resolve("");
+          reader.readAsDataURL(file);
+        });
+
+        if (dataUrl) {
+          processingQueueRef.current.push({
+            dataUrl,
+            name: file.name.replace(/\.[^/.]+$/, ""),
+            initialX,
+            initialY,
+          });
+        }
+      }
+
+      processQueue();
+    },
+    [processQueue]
+  );
+
   // Browser Async Clipboard API for mobile and touch devices
   const handlePasteFromClipboard = useCallback(async () => {
     try {
@@ -314,34 +354,36 @@ export const EditorLayout: React.FC = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#F7F6F2] overflow-hidden select-none">
-      <TopBar onPasteClipboard={handlePasteFromClipboard} />
+      <TopBar
+        onPasteClipboard={handlePasteFromClipboard}
+        onAddMultipleFiles={handleBatchAddFiles}
+      />
       <div className="flex-1 flex overflow-hidden relative">
         <AssetsPanel
           onAddStickerDirectly={handleAddStickerDirectly}
           onAddPhotoDirectly={handleAutoCreateAndAddSticker}
+          onAddMultipleFiles={handleBatchAddFiles}
         />
         <CanvasViewport
           onEngineReady={(engine) => (engineRef.current = engine)}
           onDropImage={handleAutoCreateAndAddSticker}
+          onDropFiles={handleBatchAddFiles}
         />
         <InspectorPanel />
       </div>
 
-      {/* Processing Overlay */}
+      {/* Sleek Non-Blocking Floating Status Pill */}
       {isProcessing && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-[2px] pointer-events-auto">
-          <div className="bg-white/95 backdrop-blur-sm border border-[#D9D8D2] rounded-2xl shadow-xl px-8 py-6 text-center max-w-xs mx-4">
-            {/* Spinning loader */}
-            <div className="relative w-12 h-12 mx-auto mb-4">
-              <div className="absolute inset-0 border-3 border-[#ECEBE6] rounded-full" />
-              <div className="absolute inset-0 border-3 border-transparent border-t-[#FF5A36] rounded-full animate-spin" />
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-top-2">
+          <div className="bg-[#171717]/90 text-white backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-white/10 flex items-center gap-2.5 text-xs font-medium tracking-tight">
+            <div className="relative w-2.5 h-2.5 flex items-center justify-center">
+              <div className="w-2 h-2 rounded-full bg-[#FF5A36] animate-ping absolute opacity-75" />
+              <div className="w-2 h-2 rounded-full bg-[#FF5A36]" />
             </div>
-            <p className="text-sm font-semibold text-[#171717]">
-              Making your sticker…
-            </p>
-            <p className="text-xs text-[#6F6F6A] mt-1.5">
-              {processingStage || "Processing image…"}
-            </p>
+            <span>{processingStage || "Creating sticker…"}</span>
+            <span className="text-[10px] text-white/50 font-mono pl-1 border-l border-white/20">
+              ⚡ Turbo AI
+            </span>
           </div>
         </div>
       )}
@@ -349,6 +391,7 @@ export const EditorLayout: React.FC = () => {
       {/* Mobile touch navigation dock */}
       <MobileBottomBar
         onAddFromDevice={handleAddFromDevice}
+        onAddMultipleFiles={handleBatchAddFiles}
         onPasteFromClipboard={handlePasteFromClipboard}
       />
 

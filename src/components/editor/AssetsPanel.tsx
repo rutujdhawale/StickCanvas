@@ -10,10 +10,15 @@ import { PRESET_STICKERS } from "@/lib/emoji-stickers";
 interface AssetsPanelProps {
   onAddStickerDirectly: (asset: Asset) => void;
   onAddPhotoDirectly?: (dataUrl: string, name: string) => void;
+  onAddMultipleFiles?: (files: File[]) => void;
 }
 
-export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddStickerDirectly, onAddPhotoDirectly }) => {
-  const { assets, addAsset } = useEditorStore();
+export const AssetsPanel: React.FC<AssetsPanelProps> = ({
+  onAddStickerDirectly,
+  onAddPhotoDirectly,
+  onAddMultipleFiles,
+}) => {
+  const { assets, addAsset, removeAsset } = useEditorStore();
   const { assetsPanelOpen, toggleAssetsPanel, openStickerMaker, openAssetPreview } = useUIStore();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -35,6 +40,11 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddStickerDirectly, 
   // Handle local file upload from device
   const handleFileUpload = (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const valid = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (onAddMultipleFiles) {
+      onAddMultipleFiles(valid);
+      return;
+    }
 
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith("image/")) return;
@@ -188,16 +198,28 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddStickerDirectly, 
                     className="max-h-full max-w-full object-contain pointer-events-none"
                   />
 
-                  {/* Preview action icon on hover */}
+                  {/* Preview action icon */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       openAssetPreview(asset);
                     }}
-                    className="absolute top-1 right-1 p-1 bg-white/90 rounded border border-[#D9D8D2] text-[#6F6F6A] hover:text-[#171717] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs"
+                    className="absolute top-1 left-1 p-1 bg-white/90 rounded border border-[#D9D8D2] text-[#6F6F6A] hover:text-[#171717] opacity-0 group-hover:opacity-100 transition-opacity shadow-xs z-10"
                     title="Preview sticker"
                   >
                     <Eye size={10} />
+                  </button>
+
+                  {/* Remove cross button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeAsset(asset.id);
+                    }}
+                    className="absolute top-1 right-1 p-1 bg-white/95 hover:bg-[#FF5A36] hover:text-white rounded-full border border-[#D9D8D2] hover:border-[#FF5A36] text-[#6F6F6A] opacity-90 md:opacity-0 md:group-hover:opacity-100 transition-all shadow-xs z-10"
+                    title="Remove from device stickers"
+                  >
+                    <X size={10} strokeWidth={2.5} />
                   </button>
                 </div>
               ))}

@@ -78,6 +78,22 @@ export function getFastCachedDocument(): DocumentState | null {
   return null;
 }
 
+export function getFastCachedAssets(): Asset[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("stickercanvas_fast_assets");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed as Asset[];
+      }
+    }
+  } catch {
+    // Ignore error
+  }
+  return [];
+}
+
 /**
  * Immediate save to IndexedDB with localStorage fallback
  */
@@ -89,6 +105,9 @@ export async function saveArtwork(
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem("stickercanvas_fast_doc", JSON.stringify(document));
+      if (assets.length > 0) {
+        localStorage.setItem("stickercanvas_fast_assets", JSON.stringify(assets));
+      }
     } catch {
       // Ignore quota error for sync snapshot
     }
@@ -184,6 +203,7 @@ export async function clearArtwork(): Promise<void> {
     try {
       localStorage.removeItem(LOCAL_STORAGE_FALLBACK_KEY);
       localStorage.removeItem("stickercanvas_fast_doc");
+      localStorage.removeItem("stickercanvas_fast_assets");
     } catch {
       // Ignore
     }

@@ -143,18 +143,75 @@ export class SelectionManager {
           .stroke({ color: 0x4a6cff, width: Math.max(1, 1.5 / zoom) });
       }
     } else {
-      // Multiple selection: Draw boundary box
+      // Multiple selection: Draw individual item outlines and outer group bounding box
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      selectedObjects.forEach((o) => {
-        minX = Math.min(minX, o.x - o.width / 2);
-        minY = Math.min(minY, o.y - o.height / 2);
-        maxX = Math.max(maxX, o.x + o.width / 2);
-        maxY = Math.max(maxY, o.y + o.height / 2);
+
+      selectedObjects.forEach((obj) => {
+        if (!obj.visible) return;
+
+        const w = obj.width;
+        const h = obj.height;
+        const rad = (obj.rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const hw = w / 2;
+        const hh = h / 2;
+
+        const corners = [
+          { x: -hw, y: -hh },
+          { x: hw, y: -hh },
+          { x: hw, y: hh },
+          { x: -hw, y: hh },
+        ].map((p) => ({
+          x: obj.x + (p.x * cos - p.y * sin),
+          y: obj.y + (p.x * sin + p.y * cos),
+        }));
+
+        // Subtle individual outline for each selected sticker
+        this.selectionGraphics
+          .moveTo(corners[0].x, corners[0].y)
+          .lineTo(corners[1].x, corners[1].y)
+          .lineTo(corners[2].x, corners[2].y)
+          .lineTo(corners[3].x, corners[3].y)
+          .closePath()
+          .stroke({ color: 0x4a6cff, width: Math.max(1, 1 / zoom), alpha: 0.45 });
+
+        corners.forEach((c) => {
+          minX = Math.min(minX, c.x);
+          minY = Math.min(minY, c.y);
+          maxX = Math.max(maxX, c.x);
+          maxY = Math.max(maxY, c.y);
+        });
       });
 
-      this.selectionGraphics
-        .rect(minX, minY, maxX - minX, maxY - minY)
-        .stroke({ color: 0x4a6cff, width: Math.max(1, 1.5 / zoom) });
+      if (minX !== Infinity) {
+        const pad = 4 / zoom;
+        const bX = minX - pad;
+        const bY = minY - pad;
+        const bW = (maxX - minX) + pad * 2;
+        const bH = (maxY - minY) + pad * 2;
+
+        // Group enclosing frame
+        this.selectionGraphics
+          .rect(bX, bY, bW, bH)
+          .stroke({ color: 0x4a6cff, width: Math.max(1, 1.5 / zoom), alpha: 0.9 });
+
+        // Corner indicators for group frame
+        const handleSize = 7 / zoom;
+        const halfS = handleSize / 2;
+        const groupCorners = [
+          { x: bX, y: bY },
+          { x: bX + bW, y: bY },
+          { x: bX + bW, y: bY + bH },
+          { x: bX, y: bY + bH },
+        ];
+        groupCorners.forEach((pt) => {
+          this.selectionGraphics
+            .rect(pt.x - halfS, pt.y - halfS, handleSize, handleSize)
+            .fill({ color: 0xffffff })
+            .stroke({ color: 0x4a6cff, width: Math.max(1, 1.2 / zoom) });
+        });
+      }
     }
   }
 
