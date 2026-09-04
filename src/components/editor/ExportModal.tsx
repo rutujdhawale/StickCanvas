@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Check, Printer, Download, Sparkles, Scissors } from "lucide-react";
+import { X, Check, Printer, Download, Sparkles, Scissors, Copy } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
 import {
@@ -23,6 +23,7 @@ export const ExportModal: React.FC = () => {
   const [sheetPreviewUrl, setSheetPreviewUrl] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
 
   const [printOptions, setPrintOptions] = useState<PrintSheetOptions>({
     paperFormat: "a4",
@@ -132,6 +133,41 @@ export const ExportModal: React.FC = () => {
       showToast("Printing failed. Try downloading the sheet.");
     } finally {
       setIsPrinting(false);
+    }
+  };
+
+  const handleCopyToClipboard = async () => {
+    setIsCopying(true);
+    try {
+      const { dataUrl } = await exportArtwork(
+        document.objects,
+        assets,
+        { ...exportOptions, format: "png" },
+        document.canvasWidth,
+        document.canvasHeight,
+        document.backgroundColor,
+        document.backgroundConfig
+      );
+
+      // Convert data URL to blob
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+
+      if (navigator.clipboard && typeof ClipboardItem !== "undefined") {
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
+        showToast("Copied to clipboard ✓");
+      } else {
+        // Fallback: download instead
+        downloadArtwork(dataUrl, `stickercanvas-copy.png`);
+        showToast("Clipboard unavailable — downloaded instead ✓");
+      }
+    } catch (err) {
+      console.error("Copy to clipboard failed:", err);
+      showToast("Could not copy. Try downloading instead.");
+    } finally {
+      setIsCopying(false);
     }
   };
 
@@ -348,6 +384,17 @@ export const ExportModal: React.FC = () => {
           </button>
 
           <div className="flex items-center gap-2">
+            {tab === "digital" && (
+              <button
+                onClick={handleCopyToClipboard}
+                disabled={isCopying}
+                className="px-3.5 py-1.5 text-xs font-semibold bg-white border border-[#D9D8D2] hover:bg-[#ECEBE6] text-[#171717] rounded-lg shadow-xs transition-all disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Copy size={13} />
+                <span>{isCopying ? "Copying…" : "Copy to Clipboard"}</span>
+              </button>
+            )}
+
             {tab === "print" && (
               <button
                 onClick={handleDownload}

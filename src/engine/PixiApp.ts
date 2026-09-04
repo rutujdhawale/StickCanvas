@@ -44,12 +44,13 @@ export class PixiApp {
 
     // If destroyed while awaiting init, clean up and exit safely
     if (!this.app || this.app !== app) {
+      const existingCanvas = app.canvas;
       try {
         app.destroy({ removeView: true });
       } catch (err) {
         // Safe ignore
       }
-      return app.canvas;
+      return existingCanvas || document.createElement("canvas");
     }
 
     this.stage = this.app.stage;

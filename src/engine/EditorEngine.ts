@@ -57,20 +57,28 @@ export class EditorEngine {
         onUpdate: (id, patch) => this.callbacks.onUpdateObject(id, patch),
         onCommit: () => this.callbacks.onCommitHistory(),
         onAngleChange: (angle) => this.callbacks.onAngleChange(angle),
-      }
+      },
+      container
     );
+
+    const getPointerCoords = (e: FederatedPointerEvent) => {
+      const native = e.originalEvent as any;
+      const clientX = e.clientX ?? native?.clientX ?? native?.touches?.[0]?.clientX ?? native?.changedTouches?.[0]?.clientX ?? e.global.x;
+      const clientY = e.clientY ?? native?.clientY ?? native?.touches?.[0]?.clientY ?? native?.changedTouches?.[0]?.clientY ?? e.global.y;
+      return { x: clientX, y: clientY };
+    };
 
     // Initialize SelectionManager
     this.selectionManager = new SelectionManager(
       this.pixiApp.selectionContainer,
       (handle: HandleDirection, e: FederatedPointerEvent) => {
-        const native = e.originalEvent as unknown as MouseEvent;
         const selected = this.getSelectedObjectsRef();
         if (selected.length === 1) {
+          const coords = getPointerCoords(e);
           if (handle === "rotate") {
-            this.transformManager.startRotate(selected[0], native.clientX, native.clientY);
+            this.transformManager.startRotate(selected[0], coords.x, coords.y);
           } else {
-            this.transformManager.startResize(selected[0], handle, native.clientX, native.clientY);
+            this.transformManager.startResize(selected[0], handle, coords.x, coords.y);
           }
         }
       }
@@ -83,11 +91,13 @@ export class EditorEngine {
         this.callbacks.onSelect(id, shiftKey);
       },
       (id: string, e: FederatedPointerEvent) => {
-        const native = e.originalEvent as unknown as MouseEvent;
-        if (native.button === 0 && !this.isSpaceDown) {
+        const native = e.originalEvent as any;
+        const isLeftOrTouch = e.pointerType === "touch" || native?.button === 0 || native?.button === undefined;
+        if (isLeftOrTouch && !this.isSpaceDown) {
           const obj = this.findObjectById(id);
           if (obj) {
-            this.transformManager.startDrag(obj, native.clientX, native.clientY);
+            const coords = getPointerCoords(e);
+            this.transformManager.startDrag(obj, coords.x, coords.y);
           }
         }
       }
@@ -95,8 +105,9 @@ export class EditorEngine {
 
     // Stage background click to deselect
     this.pixiApp.stage.on("pointerdown", (e: FederatedPointerEvent) => {
-      const native = e.originalEvent as unknown as MouseEvent;
-      if (native && native.button === 0 && !this.transformManager.isBusy() && !this.isSpaceDown) {
+      const native = e.originalEvent as any;
+      const isLeftOrTouch = e.pointerType === "touch" || native?.button === 0 || native?.button === undefined;
+      if (isLeftOrTouch && !this.transformManager.isBusy() && !this.isSpaceDown) {
         // If clicking canvas background, deselect
         this.callbacks.onDeselect();
       }
@@ -151,10 +162,31 @@ export class EditorEngine {
     const wheelHandler = (e: WheelEvent) => this.viewportManager.handleWheel(e);
     container.addEventListener("wheel", wheelHandler, { passive: false });
 
-    // Multi-touch gestures (pinch zoom & 2-finger pan)
-    const touchStartHandler = (e: TouchEvent) => this.viewportManager.handleTouchStart(e);
-    const touchMoveHandler = (e: TouchEvent) => this.viewportManager.handleTouchMove(e);
-    const touchEndHandler = (e: TouchEvent) => this.viewportManager.handleTouchEnd(e);
+    // Multi-touch gestures (pinch zoom & 2-finger pan) and single-touch sticker drag
+    const touchStartHandler = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        this.viewportManager.handleTouchStart(e);
+      }
+    };
+    const touchMoveHandler = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        this.viewportManager.handleTouchMove(e);
+      } else if (e.touches.length === 1 && this.transformManager.isBusy()) {
+        e.preventDefault();
+        const t = e.touches[0];
+        this.transformManager.handlePointerMove(t.clientX, t.clientY, false);
+      }
+    };
+    const touchEndHandler = (e: TouchEvent) => {
+      if (e.touches.length < 2 && this.viewportManager.getIsPanning()) {
+        this.viewportManager.handleTouchEnd(e);
+      }
+      if (this.transformManager.isBusy()) {
+        this.transformManager.handlePointerUp();
+        const selectedObjs = this.getSelectedObjectsRef();
+        this.selectionManager.update(selectedObjs, this.viewportManager.zoom);
+      }
+    };
     container.addEventListener("touchstart", touchStartHandler, { passive: false });
     container.addEventListener("touchmove", touchMoveHandler, { passive: false });
     container.addEventListener("touchend", touchEndHandler, { passive: false });

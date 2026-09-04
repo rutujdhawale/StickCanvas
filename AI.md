@@ -97,11 +97,27 @@ src/
 * Optional **Scissor Cut-Guides**: Subtle dashed lines (`#B3B2AC`, `lineDash: [8, 8]`) around each sticker.
 * Direct printer integration: `printStickerSheet` generates a clean HTML document with `@page` sizing and automatically triggers `window.print()`.
 
+### D. AI Background Removal Engine (`bg-remove.ts`)
+* Uses **`briaai/RMBG-1.4`** via `@huggingface/transformers` for state-of-the-art salient subject segmentation directly in-browser.
+* **Quantized Q8 ONNX weights**: Compact ~44MB download, cached automatically in browser CacheStorage.
+* **Hardware Acceleration**: Auto-detects WebGPU when supported (<500ms inference), seamlessly falling back to multi-threaded WebAssembly (WASM).
+* **Singleton Preloading**: `preloadModel()` is invoked non-blockingly on initial editor mount to warm up the model before the user's first paste/upload.
+* **Alpha Modulation**: Rather than binary cutouts, smooth continuous alpha masks are multiplied with source pixels for anti-aliased sticker edges without halo artifacts.
+* **Resilient Fallback**: If offline or if ONNX execution fails, automatically falls back to perimeter color-clustering flood fill.
+
+### E. Mobile Touch Architecture & Batch Upload Queue (`EditorEngine.ts`, `EditorLayout.tsx`)
+* **Touch Event Normalization**: PixiJS `FederatedPointerEvent` properties (`e.clientX`, `e.clientY`, `e.pointerType`) are normalized with native `TouchEvent` touches. Touch buttons are treated as primary inputs.
+* **1-Finger Drag & Transform**: When `transformManager.isBusy()`, `touchmove` events call `e.preventDefault()` to lock browser scrolling and provide 1:1 tactile dragging.
+* **Generous Mobile Touch Targets**: Handle graphics in `SelectionManager` include invisible 28px+ touch hit areas so fingertips can easily grab corners and rotate handles on smartphones.
+* **Sequential Batch Queue**: Multiple dropped or selected photos are placed in a FIFO queue and processed sequentially. Prevents WASM/WebGPU memory contention, displays progress indicators (`[1/3] Analyzing subject…`), and applies staggered canvas placement.
+
 ---
 
 ## 5. Development Guidelines for Future AI Models
 
-1. **Do Not Introduce Heavy External Libraries**: Avoid adding heavy UI libraries or server-side tools. Canvas operations should remain vanilla JavaScript and PixiJS.
+1. **Do Not Introduce Server Dependencies**: All canvas operations, ML segmentation, and exports must remain 100% client-side in the browser.
 2. **Maintain Strict TypeScript**: Always run `npx tsc --noEmit` after making changes. Zero type errors allowed.
 3. **Coordinate Systems**: Always convert screen pixel coordinates to canvas world coordinates using `engine.screenToCanvas(clientX, clientY)`. Never assume client coordinates equal world coordinates (zoom and pan will break).
-4. **Preserve Next.js App Router Conventions**: Route handlers go in `src/app/api/.../route.ts`, client components require `"use client"`.
+4. **Preserve Touch Compatibility**: Always ensure `touch-action: none` is maintained on canvas containers, and test both desktop mouse and mobile touch interaction paths.
+5. **Preserve Next.js App Router Conventions**: Route handlers go in `src/app/api/.../route.ts`, client components require `"use client"`.
+

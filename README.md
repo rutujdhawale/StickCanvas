@@ -10,16 +10,18 @@ Live site: [https://stickercanvas.runs-on.dev](https://stickercanvas.runs-on.dev
 ## ✨ Features
 
 - ⚡ **60–120 FPS GPU Engine**: Powered by PixiJS v8 2D scene graph on WebGL canvas. Manipulate 100+ objects with fluid response.
-- ✂️ **Make It a Sticker (Background Removal)**: Drop any photo or screenshot to instantly erase backgrounds with customizable tolerance and edge softening.
+- 🤖 **AI-Powered Background Removal (RMBG-1.4)**: Real ML-based subject segmentation running directly in the browser via `@huggingface/transformers`. Auto-detects WebGPU for <500ms inference with quantized Q8 ONNX weights and WASM fallback.
+- 📱 **Full Mobile & Touch Support**: 1-finger sticker dragging, 2-finger pinch zoom, pan gestures, enlarged mobile touch targets, and responsive bottom bar with native camera and gallery pickers.
+- 📦 **Multi-Photo Batch Upload**: Drop or select multiple images simultaneously; automatically queues and converts each into an individually bordered sticker with staggered placement.
 - 🏷️ **Die-Cut Vinyl Contour & 3D Shadow**: Authentic physical sticker outlines with customizable border thickness (`2px`–`18px`), vinyl color presets, and physical depth shadows.
 - 🎨 **Canvas Background Studio**: Solid curated paper swatches, custom hex picker, 8 smooth gradients with angle control, custom photo backgrounds with blur/opacity, dot/grid pattern overlays, and transparent checkerboard mode.
-- 📋 **Direct Clipboard Integration**: Press `Ctrl+V` anywhere to paste photos, screenshots, or copied stickers directly onto the canvas.
+- 📋 **Direct Clipboard Integration**: Press `Ctrl+V` anywhere to paste photos, screenshots, or copied stickers directly onto the canvas, plus mobile async clipboard paste.
 - 💾 **Zero Work Loss (IndexedDB Persistence)**: Auto-saves layouts and custom high-res assets to browser IndexedDB with debounced writes and synchronous frame-0 cache for instant, lag-free reload.
 - 🖨️ **Print Sticker Sheet (300 DPI)**:
   - Ready for home & commercial printers: **A4**, **US Letter**, **4×6 Photo Card**, and **6×6 Square Sheet**.
   - **Scissor Cut-Guides**: Optional dashed lines around each sticker for easy cutting with scissors or craft blade.
   - **Direct Browser Print**: Native print dialog integration (`window.print()`) with `@page` sizing.
-- 🖼️ **4K High-Res Export**: Lossless exports in transparent PNG, JPEG, or WebP at 1×, 2×, and 4× scale multipliers.
+- 🖼️ **4K High-Res Export**: Lossless exports in transparent PNG, JPEG, or WebP at 1×, 2×, and 4× scale multipliers, plus direct **Copy to Clipboard**.
 
 ---
 
@@ -44,6 +46,7 @@ Live site: [https://stickercanvas.runs-on.dev](https://stickercanvas.runs-on.dev
 - **Framework**: [Next.js 16 (App Router)](https://nextjs.org) with Turbopack
 - **UI Library**: React 19
 - **Graphics Engine**: [PixiJS v8](https://pixijs.com) (HTML5 WebGL 2D Scene Graph)
+- **AI Background Removal**: [`@huggingface/transformers`](https://huggingface.co/docs/transformers.js) with `briaai/RMBG-1.4` (ONNX Q8 with WebGPU / WASM)
 - **State Management**: [Zustand](https://zustand.docs.pmnd.rs)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com) with custom tactile design tokens
 - **Icons**: [Lucide React](https://lucide.dev)

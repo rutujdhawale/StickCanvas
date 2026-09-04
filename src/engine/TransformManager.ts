@@ -9,6 +9,7 @@ interface TransformCallbacks {
 
 export class TransformManager {
   private viewportContainer: Container;
+  private containerElement?: HTMLElement;
   private callbacks: TransformCallbacks;
 
   private activeMode: "none" | "drag" | "resize" | "rotate" = "none";
@@ -30,14 +31,26 @@ export class TransformManager {
   private rotateCenter: { x: number; y: number } = { x: 0, y: 0 };
   private startAngleOffset = 0;
 
-  constructor(viewportContainer: Container, callbacks: TransformCallbacks) {
+  constructor(
+    viewportContainer: Container,
+    callbacks: TransformCallbacks,
+    containerElement?: HTMLElement
+  ) {
     this.viewportContainer = viewportContainer;
     this.callbacks = callbacks;
+    this.containerElement = containerElement;
   }
 
   // Convert global/screen pointer coords to viewport local coords
   public screenToWorld(globalX: number, globalY: number): { x: number; y: number } {
-    const local = this.viewportContainer.toLocal(new Point(globalX, globalY));
+    let stageX = globalX;
+    let stageY = globalY;
+    if (this.containerElement) {
+      const rect = this.containerElement.getBoundingClientRect();
+      stageX = globalX - rect.left;
+      stageY = globalY - rect.top;
+    }
+    const local = this.viewportContainer.toLocal(new Point(stageX, stageY));
     return { x: local.x, y: local.y };
   }
 

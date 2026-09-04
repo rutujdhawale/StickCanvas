@@ -99,9 +99,10 @@ export class SelectionManager {
 
       if (obj.locked) return; // Don't show interactive transform handles if locked
 
-      // Draw corner handles
+      // Draw corner handles with generous touch targets for mobile fingers
       const handleSize = 8 / zoom;
       const halfS = handleSize / 2;
+      const touchHitPadding = Math.max(14 / zoom, halfS + 8);
 
       const cornerMap: [HandleDirection, { x: number; y: number }, string][] = [
         ["nw", corners[0], "nwse-resize"],
@@ -116,19 +117,27 @@ export class SelectionManager {
           g.visible = true;
           g.cursor = cursor;
           g.clear()
+            // Invisible touch hit area for mobile fingertips
+            .rect(pos.x - touchHitPadding, pos.y - touchHitPadding, touchHitPadding * 2, touchHitPadding * 2)
+            .fill({ color: 0x000000, alpha: 0.001 })
+            // Visible handle square
             .rect(pos.x - halfS, pos.y - halfS, handleSize, handleSize)
             .fill({ color: 0xffffff })
             .stroke({ color: 0x4a6cff, width: Math.max(1, 1.5 / zoom) });
         }
       });
 
-      // Draw rotate handle (small pill/circle)
+      // Draw rotate handle (with touch hit target)
       const rotG = this.handleGraphicsMap.get("rotate");
       if (rotG) {
         rotG.visible = true;
         rotG.cursor = "grab";
         const rSize = 5 / zoom;
         rotG.clear()
+          // Invisible touch hit area
+          .circle(rotatePos.x, rotatePos.y, touchHitPadding)
+          .fill({ color: 0x000000, alpha: 0.001 })
+          // Visible handle circle
           .circle(rotatePos.x, rotatePos.y, rSize)
           .fill({ color: 0xffffff })
           .stroke({ color: 0x4a6cff, width: Math.max(1, 1.5 / zoom) });

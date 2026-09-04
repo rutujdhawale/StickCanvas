@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef } from "react";
-import { Plus, Clipboard, Sparkles, Sliders, Layers, Download, Paintbrush } from "lucide-react";
+import { Plus, Clipboard, Sparkles, Sliders, Download, Paintbrush, Camera } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
 
@@ -26,11 +26,16 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
   } = useUIStore();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onAddFromDevice(file);
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach((file) => {
+        if (file.type.startsWith("image/")) {
+          onAddFromDevice(file);
+        }
+      });
       e.target.value = "";
     }
   };
@@ -38,40 +43,59 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
   const hasSelection = selectedIds.length > 0;
 
   return (
-    <div className="md:hidden fixed bottom-3 left-3 right-3 z-40 flex items-center justify-between bg-white/95 backdrop-blur-md border border-[#D9D8D2] rounded-2xl shadow-lg px-2 py-1.5 select-none">
-      {/* Hidden File Input for Device Photo / Camera */}
+    <div className="md:hidden fixed bottom-3 left-3 right-3 z-40 flex items-center justify-between bg-white/95 backdrop-blur-md border border-[#D9D8D2] rounded-2xl shadow-lg px-1.5 py-1.5 select-none">
+      {/* Hidden File Inputs */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         className="hidden"
         onChange={handleFileChange}
       />
 
-      {/* 1. Add From Device (Camera / Photos) */}
+      {/* 1. Add Photo from Gallery */}
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 text-[#171717] hover:bg-[#ECEBE6] rounded-xl active:scale-95 transition-all"
+        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 text-[#171717] hover:bg-[#ECEBE6] rounded-xl active:scale-95 transition-all"
         title="Add photo from device"
       >
         <Plus size={18} strokeWidth={2.5} className="text-[#FF5A36]" />
-        <span className="text-[10px] font-semibold mt-0.5">Device</span>
+        <span className="text-[10px] font-semibold mt-0.5">Photo</span>
       </button>
 
-      {/* 2. Paste From Clipboard (Mobile Clipboard API) */}
+      {/* 2. Take Photo with Camera */}
+      <button
+        onClick={() => cameraInputRef.current?.click()}
+        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 text-[#171717] hover:bg-[#ECEBE6] rounded-xl active:scale-95 transition-all"
+        title="Take photo with camera"
+      >
+        <Camera size={18} strokeWidth={2} className="text-[#6F6F6A]" />
+        <span className="text-[10px] font-semibold mt-0.5">Camera</span>
+      </button>
+
+      {/* 3. Paste From Clipboard */}
       <button
         onClick={onPasteFromClipboard}
-        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 text-[#171717] hover:bg-[#ECEBE6] rounded-xl active:scale-95 transition-all"
+        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 text-[#171717] hover:bg-[#ECEBE6] rounded-xl active:scale-95 transition-all"
         title="Paste copied photo from clipboard"
       >
         <Clipboard size={18} strokeWidth={2} className="text-[#4A6CFF]" />
         <span className="text-[10px] font-semibold mt-0.5">Paste</span>
       </button>
 
-      {/* 2. Stickers Drawer */}
+      {/* 4. Stickers Drawer */}
       <button
         onClick={toggleAssetsPanel}
-        className={`flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 rounded-xl active:scale-95 transition-all ${
+        className={`flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 rounded-xl active:scale-95 transition-all ${
           assetsPanelOpen
             ? "bg-[#ECEBE6] text-[#171717] font-semibold"
             : "text-[#6F6F6A] hover:text-[#171717]"
@@ -82,10 +106,10 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
         <span className="text-[10px] mt-0.5">Stickers</span>
       </button>
 
-      {/* 3. Canvas Background Drawer */}
+      {/* 5. Canvas Background */}
       <button
         onClick={toggleBackgroundDrawer}
-        className={`flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 rounded-xl active:scale-95 transition-all ${
+        className={`flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 rounded-xl active:scale-95 transition-all ${
           backgroundDrawerOpen
             ? "bg-[#ECEBE6] text-[#171717] font-semibold"
             : "text-[#6F6F6A] hover:text-[#171717]"
@@ -96,10 +120,10 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
         <span className="text-[10px] mt-0.5">Canvas</span>
       </button>
 
-      {/* 4. Inspector / Transparency */}
+      {/* 6. Inspector / Adjust */}
       <button
         onClick={toggleInspectorPanel}
-        className={`flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 rounded-xl active:scale-95 transition-all relative ${
+        className={`flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 rounded-xl active:scale-95 transition-all relative ${
           inspectorPanelOpen
             ? "bg-[#ECEBE6] text-[#171717] font-semibold"
             : "text-[#6F6F6A] hover:text-[#171717]"
@@ -109,24 +133,14 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
         <Sliders size={18} strokeWidth={2} />
         <span className="text-[10px] mt-0.5">Adjust</span>
         {hasSelection && (
-          <span className="absolute top-1.5 right-3 w-2 h-2 rounded-full bg-[#4A6CFF]" />
+          <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-[#4A6CFF]" />
         )}
       </button>
 
-      {/* 4. Layers */}
-      <button
-        onClick={toggleInspectorPanel}
-        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 text-[#6F6F6A] hover:text-[#171717] rounded-xl active:scale-95 transition-all"
-        title="Layers list"
-      >
-        <Layers size={18} strokeWidth={2} />
-        <span className="text-[10px] mt-0.5">Layers</span>
-      </button>
-
-      {/* 5. Export */}
+      {/* 7. Export */}
       <button
         onClick={openExportModal}
-        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[44px] py-1 bg-[#FF5A36] text-white rounded-xl active:scale-95 transition-all shadow-xs"
+        className="flex-1 flex flex-col items-center justify-center min-h-[44px] min-w-[40px] py-1 bg-[#FF5A36] text-white rounded-xl active:scale-95 transition-all shadow-xs"
         title="Export artwork"
       >
         <Download size={18} strokeWidth={2.5} />
