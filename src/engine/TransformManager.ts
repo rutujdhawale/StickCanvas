@@ -125,7 +125,30 @@ export class TransformManager {
     this.startAngleOffset = ((obj.rotation * Math.PI) / 180) - currentMouseAngle;
   }
 
+  private rafId: number | null = null;
+  private pendingPointer: { globalX: number; globalY: number; shiftKey: boolean } | null = null;
+
   public handlePointerMove(globalX: number, globalY: number, shiftKey = false) {
+    if (this.activeMode === "none" || !this.activeObjectId) return;
+
+    this.pendingPointer = { globalX, globalY, shiftKey };
+
+    if (this.rafId === null) {
+      this.rafId = requestAnimationFrame(() => {
+        this.rafId = null;
+        if (this.pendingPointer && this.activeMode !== "none" && this.activeObjectId) {
+          this.applyTransform(
+            this.pendingPointer.globalX,
+            this.pendingPointer.globalY,
+            this.pendingPointer.shiftKey
+          );
+          this.pendingPointer = null;
+        }
+      });
+    }
+  }
+
+  private applyTransform(globalX: number, globalY: number, shiftKey: boolean) {
     if (this.activeMode === "none" || !this.activeObjectId) return;
 
     const worldPtr = this.screenToWorld(globalX, globalY);
@@ -229,6 +252,20 @@ export class TransformManager {
   }
 
   public handlePointerUp() {
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+
+    if (this.pendingPointer && this.activeMode !== "none" && this.activeObjectId) {
+      this.applyTransform(
+        this.pendingPointer.globalX,
+        this.pendingPointer.globalY,
+        this.pendingPointer.shiftKey
+      );
+      this.pendingPointer = null;
+    }
+
     if (this.activeMode !== "none") {
       this.activeMode = "none";
       this.activeObjectId = null;
