@@ -216,6 +216,25 @@ export interface PrintSheetOptions {
   orientation: "portrait" | "landscape";
   showCutGuides: boolean;
   paperFinish: "glossy-vinyl" | "matte" | "clear-vinyl";
+  watermarked?: boolean;
+}
+
+export function applyPrintPreviewWatermark(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  ctx.save();
+  ctx.rotate((-25 * Math.PI) / 180);
+  ctx.font = "bold 26px sans-serif";
+  ctx.fillStyle = "rgba(23, 23, 23, 0.08)";
+  ctx.textAlign = "center";
+
+  const stepX = 400;
+  const stepY = 160;
+
+  for (let x = -width; x < width * 2; x += stepX) {
+    for (let y = -height; y < height * 2; y += stepY) {
+      ctx.fillText("STICKERCANVAS 300 DPI PREVIEW • UNLOCK AT CHECKOUT", x, y);
+    }
+  }
+  ctx.restore();
 }
 
 export const PAPER_SIZES_300DPI: Record<
@@ -314,6 +333,11 @@ export async function exportPrintSheet(
   ctx.fillStyle = "#A8A7A1";
   ctx.font = "bold 20px monospace";
   ctx.fillText(`StickerCanvas · ${baseSize.label} (${baseSize.dimensions}) · 300 DPI`, marginX, pageHeight - marginY * 0.4);
+
+  // Apply preview watermark for non-purchased sheets
+  if (printOptions.watermarked) {
+    applyPrintPreviewWatermark(ctx, pageWidth, pageHeight);
+  }
 
   const dataUrl = sheetCanvas.toDataURL("image/png");
   const filename = `stickercanvas-print-sheet-${printOptions.paperFormat}-${printOptions.orientation}.png`;
