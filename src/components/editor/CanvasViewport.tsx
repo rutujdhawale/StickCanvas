@@ -11,10 +11,9 @@ import { getDefaultAssets } from "@/lib/emoji-stickers";
 interface CanvasViewportProps {
   onEngineReady?: (engine: EditorEngine) => void;
   onDropImage?: (dataUrl: string, name: string, worldX?: number, worldY?: number) => void;
-  onDropFiles?: (files: File[], initialX?: number, initialY?: number) => void;
 }
 
-export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, onDropImage, onDropFiles }) => {
+export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, onDropImage }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<EditorEngine | null>(null);
 
@@ -25,8 +24,6 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, o
     addObject,
     updateObject,
     select,
-    selectMultiple,
-    toggleSelect,
     deselect,
     pushHistory,
     setViewport,
@@ -53,15 +50,7 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, o
 
     const engine = new EditorEngine({
       onSelect: (id, shiftKey) => {
-        const { isMultiSelectMode } = useUIStore.getState();
-        if (shiftKey || isMultiSelectMode) {
-          toggleSelect(id);
-        } else {
-          select(id);
-        }
-      },
-      onSelectMultiple: (ids) => {
-        selectMultiple(ids);
+        select(id);
       },
       onDeselect: () => {
         deselect();
@@ -172,26 +161,30 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, o
     // 2. Check if external files were dropped from device / desktop
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
-      if (imageFiles.length === 0) return;
       const world = engineRef.current ? engineRef.current.screenToCanvas(e.clientX, e.clientY) : undefined;
-      const posX = world ? Math.round(world.x) : undefined;
-      const posY = world ? Math.round(world.y) : undefined;
 
-      if (onDropFiles) {
-        onDropFiles(imageFiles, posX, posY);
-      } else if (onDropImage) {
-        imageFiles.forEach((file) => {
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            const dataUrl = ev.target?.result as string;
-            if (!dataUrl) return;
-            const cleanName = file.name.replace(/\.[^/.]+$/, "");
-            onDropImage(dataUrl, cleanName, posX, posY);
-          };
-          reader.readAsDataURL(file);
-        });
-      }
+      Array.from(files).forEach((file) => {
+        if (!file.type.startsWith("image/")) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = ev.target?.result as string;
+          if (!dataUrl) return;
+
+          const cleanName = file.name.replace(/\.[^/.]+$/, "");
+          if (onDropImage) {
+            onDropImage(
+              dataUrl,
+              cleanName,
+              world ? Math.round(world.x) : undefined,
+              world ? Math.round(world.y) : undefined
+            );
+          } else {
+            openStickerMaker(dataUrl, cleanName);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
     }
   };
 
@@ -243,7 +236,7 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, o
       onDrop={handleDrop}
       className="relative flex-1 h-[calc(100vh-48px)] overflow-hidden paper-bg select-none touch-none"
     >
-      {/* Hidden file input for empty-state upload button */}
+      {/* Hidden file input for gallery/photo selection (supports multiple images) */}
       <input
         ref={fileInputRef}
         type="file"
@@ -252,20 +245,16 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, o
         className="hidden"
         onChange={(e) => {
           const files = e.target.files;
-          if (files && files.length > 0) {
-            const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
-            if (onDropFiles) {
-              onDropFiles(imageFiles);
-            } else if (onDropImage) {
-              imageFiles.forEach((file) => {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  const dataUrl = ev.target?.result as string;
-                  if (dataUrl) onDropImage(dataUrl, file.name.replace(/\.[^/.]+$/, ""));
-                };
-                reader.readAsDataURL(file);
-              });
-            }
+          if (files && files.length > 0 && onDropImage) {
+            Array.from(files).forEach((file) => {
+              if (!file.type.startsWith("image/")) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const dataUrl = ev.target?.result as string;
+                if (dataUrl) onDropImage(dataUrl, file.name.replace(/\.[^/.]+$/, ""));
+              };
+              reader.readAsDataURL(file);
+            });
           }
           e.target.value = "";
         }}

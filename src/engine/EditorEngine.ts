@@ -8,7 +8,7 @@ import { StickerObject, Asset, ViewportState, HandleDirection, CanvasBackgroundC
 
 export interface EditorEngineCallbacks {
   onSelect: (id: string, shiftKey: boolean) => void;
-  onSelectMultiple: (ids: string[]) => void;
+  onSelectMultiple?: (ids: string[]) => void;
   onDeselect: () => void;
   onUpdateObject: (id: string, patch: Partial<StickerObject>) => void;
   onCommitHistory: () => void;
@@ -236,7 +236,7 @@ export class EditorEngine {
           ? Array.from(new Set([...this.initialSelectedIds, ...matchedIds]))
           : matchedIds;
 
-        this.callbacks.onSelectMultiple(nextSelected);
+        this.callbacks.onSelectMultiple?.(nextSelected);
       }
     };
 

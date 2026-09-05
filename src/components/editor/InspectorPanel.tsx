@@ -16,14 +16,6 @@ import {
   FlipVertical,
   Scissors,
   Wand2,
-  AlignStartVertical,
-  AlignCenterHorizontal,
-  AlignEndVertical,
-  AlignStartHorizontal,
-  AlignCenterVertical,
-  AlignEndHorizontal,
-  AlignHorizontalDistributeCenter,
-  AlignVerticalDistributeCenter,
 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
@@ -38,13 +30,9 @@ export const InspectorPanel: React.FC = () => {
     updateObject,
     removeObject,
     select,
-    toggleSelect,
     bringForward,
     sendBackward,
-    bringToFront,
-    sendToBack,
     duplicateSelected,
-    deleteSelected,
     pushHistory,
   } = useEditorStore();
 
@@ -54,156 +42,10 @@ export const InspectorPanel: React.FC = () => {
 
   if (!inspectorPanelOpen) return null;
 
-  const selectedObjs = document.objects.filter((o) => selectedIds.includes(o.id));
-  const selectedObj = selectedObjs[0];
-  const isMulti = selectedObjs.length > 1;
-  const currentTab = selectedObjs.length > 0 ? tab : "canvas";
+  const selectedObj = document.objects.find((o) => selectedIds.includes(o.id));
+  const currentTab = selectedObj ? tab : "canvas";
   const assetMap = new Map(assets.map((a) => [a.id, a]));
-  const selectedAsset = !isMulti && selectedObj ? assetMap.get(selectedObj.assetId) : undefined;
-
-  // Batch states
-  const allLocked = selectedObjs.length > 0 && selectedObjs.every((o) => o.locked);
-  const anyBorderActive = selectedObjs.some((o) => (o.borderWidth ?? 0) > 0);
-  const batchOpacity =
-    selectedObjs.length > 0
-      ? Math.round(
-          (selectedObjs.reduce((sum, o) => sum + o.opacity, 0) / selectedObjs.length) * 100
-        )
-      : 100;
-  const batchBorderWidth =
-    selectedObjs.length > 0
-      ? (selectedObjs.find((o) => (o.borderWidth ?? 0) > 0)?.borderWidth ?? 8)
-      : 8;
-
-  // Batch actions
-  const handleToggleLockAll = () => {
-    selectedObjs.forEach((o) => updateObject(o.id, { locked: !allLocked }));
-    pushHistory();
-  };
-
-  const handleBatchOpacity = (val: number) => {
-    const clamped = Math.max(0, Math.min(100, val)) / 100;
-    selectedObjs.forEach((o) => updateObject(o.id, { opacity: clamped }));
-    pushHistory();
-  };
-
-  const handleToggleBatchBorder = () => {
-    const nextBorder = !anyBorderActive;
-    selectedObjs.forEach((o) =>
-      updateObject(o.id, {
-        borderWidth: nextBorder ? 8 : 0,
-        borderColor: o.borderColor || "#ffffff",
-        hasShadow: true,
-      })
-    );
-    pushHistory();
-  };
-
-  const handleBatchBorderWidth = (width: number) => {
-    selectedObjs.forEach((o) => updateObject(o.id, { borderWidth: width }));
-    pushHistory();
-  };
-
-  const handleBatchBorderColor = (color: string) => {
-    selectedObjs.forEach((o) => updateObject(o.id, { borderColor: color }));
-    pushHistory();
-  };
-
-  const alignLeft = () => {
-    if (selectedObjs.length < 2) return;
-    const minL = Math.min(...selectedObjs.map((o) => o.x - o.width / 2));
-    selectedObjs.forEach((o) => {
-      updateObject(o.id, { x: Math.round(minL + o.width / 2) });
-    });
-    pushHistory();
-  };
-
-  const alignCenterH = () => {
-    if (selectedObjs.length < 2) return;
-    const avgX = selectedObjs.reduce((sum, o) => sum + o.x, 0) / selectedObjs.length;
-    selectedObjs.forEach((o) => {
-      updateObject(o.id, { x: Math.round(avgX) });
-    });
-    pushHistory();
-  };
-
-  const alignRight = () => {
-    if (selectedObjs.length < 2) return;
-    const maxR = Math.max(...selectedObjs.map((o) => o.x + o.width / 2));
-    selectedObjs.forEach((o) => {
-      updateObject(o.id, { x: Math.round(maxR - o.width / 2) });
-    });
-    pushHistory();
-  };
-
-  const alignTop = () => {
-    if (selectedObjs.length < 2) return;
-    const minT = Math.min(...selectedObjs.map((o) => o.y - o.height / 2));
-    selectedObjs.forEach((o) => {
-      updateObject(o.id, { y: Math.round(minT + o.height / 2) });
-    });
-    pushHistory();
-  };
-
-  const alignMiddleV = () => {
-    if (selectedObjs.length < 2) return;
-    const avgY = selectedObjs.reduce((sum, o) => sum + o.y, 0) / selectedObjs.length;
-    selectedObjs.forEach((o) => {
-      updateObject(o.id, { y: Math.round(avgY) });
-    });
-    pushHistory();
-  };
-
-  const alignBottom = () => {
-    if (selectedObjs.length < 2) return;
-    const maxB = Math.max(...selectedObjs.map((o) => o.y + o.height / 2));
-    selectedObjs.forEach((o) => {
-      updateObject(o.id, { y: Math.round(maxB - o.height / 2) });
-    });
-    pushHistory();
-  };
-
-  const distributeH = () => {
-    if (selectedObjs.length < 3) return;
-    const sorted = [...selectedObjs].sort((a, b) => a.x - b.x);
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const totalSpan = last.x - first.x;
-    const step = totalSpan / (sorted.length - 1);
-    sorted.forEach((o, i) => {
-      if (i > 0 && i < sorted.length - 1) {
-        updateObject(o.id, { x: Math.round(first.x + step * i) });
-      }
-    });
-    pushHistory();
-  };
-
-  const distributeV = () => {
-    if (selectedObjs.length < 3) return;
-    const sorted = [...selectedObjs].sort((a, b) => a.y - b.y);
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const totalSpan = last.y - first.y;
-    const step = totalSpan / (sorted.length - 1);
-    sorted.forEach((o, i) => {
-      if (i > 0 && i < sorted.length - 1) {
-        updateObject(o.id, { y: Math.round(first.y + step * i) });
-      }
-    });
-    pushHistory();
-  };
-
-  const handleBringGroupToFront = () => {
-    const ordered = [...selectedObjs].sort((a, b) => a.zIndex - b.zIndex);
-    ordered.forEach((o) => bringToFront(o.id));
-    pushHistory();
-  };
-
-  const handleSendGroupToBack = () => {
-    const ordered = [...selectedObjs].sort((a, b) => b.zIndex - a.zIndex);
-    ordered.forEach((o) => sendToBack(o.id));
-    pushHistory();
-  };
+  const selectedAsset = selectedObj ? assetMap.get(selectedObj.assetId) : undefined;
 
   // Layers list sorted with highest z-index on top
   const layers = [...document.objects].sort((a, b) => b.zIndex - a.zIndex);
@@ -250,14 +92,14 @@ export const InspectorPanel: React.FC = () => {
         <div className="flex items-center gap-1 bg-[#ECEBE6] p-0.5 rounded-lg text-xs font-medium flex-1">
           <button
             onClick={() => setTab("object")}
-            disabled={selectedObjs.length === 0}
+            disabled={!selectedObj}
             className={`flex-1 py-1 px-2 rounded-md transition-all ${
               currentTab === "object"
                 ? "bg-white text-[#171717] font-semibold shadow-xs"
                 : "text-[#6F6F6A] hover:text-[#171717] disabled:opacity-40 disabled:hover:text-[#6F6F6A]"
             }`}
           >
-            {isMulti ? `Group (${selectedObjs.length})` : "Sticker"}
+            Sticker
           </button>
           <button
             onClick={() => setTab("canvas")}
@@ -286,251 +128,8 @@ export const InspectorPanel: React.FC = () => {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto divide-y divide-[#D9D8D2]">
-          {isMulti ? (
-            /* Multi-Selection Group Controls */
-            <div className="p-3 space-y-3.5">
-              {/* Group Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#4A6CFF]/15 text-[#4A6CFF]">
-                    {selectedObjs.length} Stickers
-                  </span>
-                  <span className="text-[11px] text-[#6F6F6A] font-medium">Selected</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={handleToggleLockAll}
-                    className={`p-1 rounded transition-colors ${
-                      allLocked ? "text-[#FF5A36] bg-[#FF5A36]/10" : "text-[#6F6F6A] hover:text-[#171717]"
-                    }`}
-                    title={allLocked ? "Unlock All" : "Lock All"}
-                  >
-                    {allLocked ? <Lock size={14} /> : <Unlock size={14} />}
-                  </button>
-                  <button
-                    onClick={duplicateSelected}
-                    className="p-1 rounded text-[#6F6F6A] hover:text-[#171717] hover:bg-[#ECEBE6] transition-colors"
-                    title="Duplicate All (Ctrl+D)"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <button
-                    onClick={deleteSelected}
-                    className="p-1 rounded text-[#6F6F6A] hover:text-[#FF5A36] hover:bg-[#ECEBE6] transition-colors"
-                    title="Delete All (Del)"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Align & Distribute */}
-              <div>
-                <span className="text-[11px] font-medium text-[#6F6F6A] block mb-1.5">
-                  Align & Distribute
-                </span>
-                <div className="grid grid-cols-6 gap-1 bg-white p-1 rounded-lg border border-[#D9D8D2]">
-                  <button
-                    onClick={alignLeft}
-                    title="Align Left"
-                    className="p-1.5 rounded hover:bg-[#ECEBE6] text-[#171717] flex items-center justify-center transition-colors"
-                  >
-                    <AlignStartVertical size={14} />
-                  </button>
-                  <button
-                    onClick={alignCenterH}
-                    title="Align Center Horizontal"
-                    className="p-1.5 rounded hover:bg-[#ECEBE6] text-[#171717] flex items-center justify-center transition-colors"
-                  >
-                    <AlignCenterHorizontal size={14} />
-                  </button>
-                  <button
-                    onClick={alignRight}
-                    title="Align Right"
-                    className="p-1.5 rounded hover:bg-[#ECEBE6] text-[#171717] flex items-center justify-center transition-colors"
-                  >
-                    <AlignEndVertical size={14} />
-                  </button>
-                  <button
-                    onClick={alignTop}
-                    title="Align Top"
-                    className="p-1.5 rounded hover:bg-[#ECEBE6] text-[#171717] flex items-center justify-center transition-colors"
-                  >
-                    <AlignStartHorizontal size={14} />
-                  </button>
-                  <button
-                    onClick={alignMiddleV}
-                    title="Align Middle Vertical"
-                    className="p-1.5 rounded hover:bg-[#ECEBE6] text-[#171717] flex items-center justify-center transition-colors"
-                  >
-                    <AlignCenterVertical size={14} />
-                  </button>
-                  <button
-                    onClick={alignBottom}
-                    title="Align Bottom"
-                    className="p-1.5 rounded hover:bg-[#ECEBE6] text-[#171717] flex items-center justify-center transition-colors"
-                  >
-                    <AlignEndHorizontal size={14} />
-                  </button>
-                </div>
-                {selectedObjs.length >= 3 && (
-                  <div className="grid grid-cols-2 gap-1.5 mt-1.5">
-                    <button
-                      onClick={distributeH}
-                      className="text-[10px] py-1 px-1.5 rounded bg-white hover:bg-[#ECEBE6] border border-[#D9D8D2] text-[#6F6F6A] hover:text-[#171717] flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <AlignHorizontalDistributeCenter size={12} />
-                      <span>Distribute H</span>
-                    </button>
-                    <button
-                      onClick={distributeV}
-                      className="text-[10px] py-1 px-1.5 rounded bg-white hover:bg-[#ECEBE6] border border-[#D9D8D2] text-[#6F6F6A] hover:text-[#171717] flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <AlignVerticalDistributeCenter size={12} />
-                      <span>Distribute V</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Group Opacity */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-medium text-[#6F6F6A]">
-                    Group Opacity
-                  </span>
-                  <span className="text-xs font-mono font-medium text-[#171717]">{batchOpacity}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={batchOpacity}
-                  onChange={(e) => handleBatchOpacity(Number(e.target.value))}
-                  className="w-full accent-[#171717] cursor-pointer"
-                />
-                <div className="flex gap-1.5 mt-2">
-                  {[100, 75, 50, 25].map((val) => (
-                    <button
-                      key={val}
-                      onClick={() => handleBatchOpacity(val)}
-                      className={`flex-1 py-1 text-[10px] rounded border transition-colors ${
-                        batchOpacity === val
-                          ? "bg-[#171717] text-white border-[#171717] font-semibold"
-                          : "bg-white text-[#6F6F6A] border-[#D9D8D2] hover:text-[#171717] hover:bg-[#FAF9F5]"
-                      }`}
-                    >
-                      {val}%
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Batch Die-Cut Border */}
-              <div className="pt-3 border-t border-[#D9D8D2] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#171717]">
-                    Die-cut Border (All)
-                  </span>
-                  <button
-                    onClick={handleToggleBatchBorder}
-                    className={`w-9 h-5 rounded-full transition-colors relative p-0.5 ${
-                      anyBorderActive ? "bg-[#FF5A36]" : "bg-[#D9D8D2]"
-                    }`}
-                    title="Toggle die-cut border for all selected stickers"
-                  >
-                    <span
-                      className={`block w-4 h-4 bg-white rounded-full shadow-xs transition-transform ${
-                        anyBorderActive ? "translate-x-4" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-                {anyBorderActive && (
-                  <div className="p-2.5 bg-[#FAF9F5] rounded-xl border border-[#D9D8D2] space-y-2.5 animate-in fade-in duration-150">
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span className="text-[#6F6F6A]">Thickness</span>
-                        <span className="font-mono font-semibold text-[#171717]">
-                          {batchBorderWidth}px
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="2"
-                        max="18"
-                        step="1"
-                        value={batchBorderWidth}
-                        onChange={(e) => handleBatchBorderWidth(Number(e.target.value))}
-                        className="w-full accent-[#FF5A36] h-1.5 bg-[#ECEBE6] rounded-lg cursor-pointer"
-                      />
-                      <div className="flex gap-1 mt-1.5">
-                        {[
-                          { label: "Thin", val: 4 },
-                          { label: "Medium", val: 8 },
-                          { label: "Bold", val: 14 },
-                        ].map((preset) => (
-                          <button
-                            key={preset.val}
-                            onClick={() => handleBatchBorderWidth(preset.val)}
-                            className={`flex-1 py-0.5 text-[10px] rounded border transition-colors ${
-                              batchBorderWidth === preset.val
-                                ? "bg-[#171717] text-white border-[#171717] font-semibold"
-                                : "bg-white text-[#6F6F6A] border-[#D9D8D2] hover:text-[#171717]"
-                            }`}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between pt-1 border-t border-[#D9D8D2]/60">
-                      <span className="text-[11px] text-[#6F6F6A]">Border Color</span>
-                      <div className="flex items-center gap-1.5">
-                        {[
-                          { name: "Classic White", hex: "#ffffff" },
-                          { name: "Vintage Cream", hex: "#FAF7EE" },
-                          { name: "Ink Black", hex: "#171717" },
-                          { name: "Tomato Accent", hex: "#FF5A36" },
-                        ].map((colorPreset) => (
-                          <button
-                            key={colorPreset.hex}
-                            onClick={() => handleBatchBorderColor(colorPreset.hex)}
-                            title={colorPreset.name}
-                            style={{ backgroundColor: colorPreset.hex }}
-                            className="w-5 h-5 rounded-full border border-[#D9D8D2] shadow-2xs hover:scale-110 transition-transform"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Batch Arrange */}
-              <div className="pt-3 border-t border-[#D9D8D2]">
-                <span className="text-[11px] font-medium text-[#6F6F6A] block mb-1.5">
-                  Group Layer Order
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={handleBringGroupToFront}
-                    className="py-1.5 px-2 bg-white hover:bg-[#ECEBE6] text-[#171717] border border-[#D9D8D2] rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-                  >
-                    <ChevronUp size={13} />
-                    <span>Bring to Top</span>
-                  </button>
-                  <button
-                    onClick={handleSendGroupToBack}
-                    className="py-1.5 px-2 bg-white hover:bg-[#ECEBE6] text-[#171717] border border-[#D9D8D2] rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-                  >
-                    <ChevronDown size={13} />
-                    <span>Send to Bottom</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : selectedObj ? (
+          {/* Selected Object Properties */}
+          {selectedObj ? (
             <div className="p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-[#171717] truncate max-w-[150px]">
@@ -556,7 +155,7 @@ export const InspectorPanel: React.FC = () => {
                   <Copy size={14} />
                 </button>
                 <button
-                  onClick={deleteSelected}
+                  onClick={() => removeObject(selectedObj.id)}
                   className="p-1 rounded text-[#6F6F6A] hover:text-[#FF5A36] hover:bg-[#ECEBE6] transition-colors"
                   title="Delete (Del)"
                 >
@@ -913,13 +512,7 @@ export const InspectorPanel: React.FC = () => {
                 return (
                   <div
                     key={obj.id}
-                    onClick={(e) => {
-                      if (e.shiftKey) {
-                        toggleSelect(obj.id);
-                      } else {
-                        select(obj.id);
-                      }
-                    }}
+                    onClick={() => select(obj.id)}
                     className={`flex items-center gap-2 p-1.5 rounded-lg border transition-all cursor-pointer ${
                       isSelected
                         ? "bg-white border-[#4A6CFF] shadow-xs"

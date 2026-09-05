@@ -10,14 +10,9 @@ import { PRESET_STICKERS } from "@/lib/emoji-stickers";
 interface AssetsPanelProps {
   onAddStickerDirectly: (asset: Asset) => void;
   onAddPhotoDirectly?: (dataUrl: string, name: string) => void;
-  onAddMultipleFiles?: (files: File[]) => void;
 }
 
-export const AssetsPanel: React.FC<AssetsPanelProps> = ({
-  onAddStickerDirectly,
-  onAddPhotoDirectly,
-  onAddMultipleFiles,
-}) => {
+export const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddStickerDirectly, onAddPhotoDirectly }) => {
   const { assets, addAsset, removeAsset } = useEditorStore();
   const { assetsPanelOpen, toggleAssetsPanel, openStickerMaker, openAssetPreview } = useUIStore();
   const [search, setSearch] = useState("");
@@ -40,11 +35,6 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({
   // Handle local file upload from device
   const handleFileUpload = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const valid = Array.from(files).filter((file) => file.type.startsWith("image/"));
-    if (onAddMultipleFiles) {
-      onAddMultipleFiles(valid);
-      return;
-    }
 
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith("image/")) return;
@@ -198,7 +188,7 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({
                     className="max-h-full max-w-full object-contain pointer-events-none"
                   />
 
-                  {/* Preview action icon */}
+                  {/* Preview action icon on top-left */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -210,7 +200,7 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({
                     <Eye size={10} />
                   </button>
 
-                  {/* Remove cross button */}
+                  {/* Remove cross button on top-right */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
