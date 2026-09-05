@@ -3,15 +3,32 @@ name: "CodeQL Analysis"
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "**.md"
+      - "public/**"
+      - "LICENSE"
+      - ".gitignore"
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - "**.md"
+      - "public/**"
+      - "LICENSE"
+      - ".gitignore"
   schedule:
+    # Run every Monday at 06:00 UTC
     - cron: '0 6 * * 1'
+
+# Cancel in-progress runs for the same branch/PR to save runner minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
     name: CodeQL Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: read
@@ -20,16 +37,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'javascript-typescript' ]
+        include:
+          - language: javascript-typescript
+            build-mode: none
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ matrix.language }}
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: +security-extended,security-and-quality
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          upload-database: false
