@@ -47,16 +47,18 @@ export const ExportModal: React.FC = () => {
     setHasAccess(hasActivePrintAccess());
   }, [exportModalOpen, tab, isPaywallOpen]);
 
-  // Handle return from Stripe checkout
+  // Handle return from Dodo Payments checkout
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("payment") === "success") {
       const tier = (params.get("tier") as any) || "single_sheet";
+      const paymentId = params.get("payment_id") || params.get("session_id") || "";
       savePrintEntitlement({
         type: tier,
-        credits: tier === "pack" ? 5 : 1,
+        credits: tier === "sheet_pack" ? 5 : tier === "pro_creator" ? 999 : 1,
         unlockedAt: Date.now(),
+        token: paymentId,
       });
       setHasAccess(true);
       showToast("🎉 300 DPI Print Sheet Unlocked!");
@@ -65,6 +67,7 @@ export const ExportModal: React.FC = () => {
       // Clean query parameters from URL
       const url = new URL(window.location.href);
       url.searchParams.delete("payment");
+      url.searchParams.delete("payment_id");
       url.searchParams.delete("session_id");
       url.searchParams.delete("tier");
       window.history.replaceState({}, "", url.pathname);

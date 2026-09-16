@@ -1,22 +1,11 @@
-// AI-Powered Background Removal Engine — Turbo & Precision Edition
-// Uses RMBG-1.4 (briaai) via @huggingface/transformers with high-performance quantized execution,
-// connected component main-body saliency detection, noise rejection, and GPU canvas compositing.
-
-import { pipeline, env, RawImage, AutoConfig } from "@huggingface/transformers";
-import type { ImageSegmentationPipeline } from "@huggingface/transformers";
-
-// Configure transformers.js for fast in-browser execution
-env.allowLocalModels = false;
-env.useBrowserCache = true;
-
-// Enable SIMD and multithreaded acceleration for ONNX Runtime WASM
-if (typeof navigator !== "undefined" && env.backends?.onnx?.wasm) {
-  env.backends.onnx.wasm.simd = true;
-  env.backends.onnx.wasm.numThreads = Math.min(
-    4,
-    Math.max(1, (navigator.hardwareConcurrency || 4) - 1)
-  );
-}
+// AI-Powered Background Removal Engine — Web Worker & GPU Orchestrator
+// High-performance background removal pipeline:
+// 1. Off-thread Web Worker ML inference (RMBG-1.4) via WebGPU / WASM SIMD
+// 2. Instant transparent PNG fast-path (<1ms)
+// 3. Multi-level mask refinement: Connected components, spatial saliency, hole-filling
+// 4. Color/halo decontamination around hair and soft edges
+// 5. Zero-copy ImageBitmap transfers and GPU canvas compositing
+// 6. Built-in cancellation and mask caching for instant UI adjustments
 
 export interface BgRemovalOptions {
   tolerance?: number; // Only used by fallback flood-fill (0-100)
@@ -25,89 +14,202 @@ export interface BgRemovalOptions {
   opacity?: number; // 0 to 1
   addStickerBorder?: boolean; // white die-cut border
   borderWidth?: number; // border thickness in px
+  autoTrim?: boolean; // If false, preserves original image dimensions (for Before/After alignment)
+  quality?: "fast" | "balanced" | "high"; // Adaptive inference preset
   onProgress?: (stage: string, progress: number) => void;
 }
 
-// ─── ML Model Pipeline Singleton & Fail-Safe Fallback ────────────
+export interface ModelStatus {
+  ready: boolean;
+  loading: boolean;
+  backend: "webgpu" | "wasm" | null;
+  error: string | null;
+}
 
-let pipelineInstance: ImageSegmentationPipeline | null = null;
-let pipelineLoadingPromise: Promise<ImageSegmentationPipeline> | null = null;
-let activeBackend: "webgpu" | "wasm" = "wasm";
+// ─── Status & Event Listeners ────────────────────────────────────
 
+let currentStatus: ModelStatus = {
+  ready: false,
+  loading: false,
+  backend: null,
+  error: null,
+};
+
+const statusListeners = new Set<(status: ModelStatus) => void>();
+
+function notifyStatusChange(update: Partial<ModelStatus>): void {
+  currentStatus = { ...currentStatus, ...update };
+  statusListeners.forEach((fn) => {
+    try {
+      fn(currentStatus);
+    } catch {
+      // Ignore listener errors
+    }
+  });
+}
+
+export function getModelStatus(): ModelStatus {
+  return currentStatus;
+}
+
+export function onModelStatusChange(listener: (status: ModelStatus) => void): () => void {
+  statusListeners.add(listener);
+  listener(currentStatus);
+  return () => {
+    statusListeners.delete(listener);
+  };
+}
+
+// ─── Mask Cache ──────────────────────────────────────────────────
 // Cache masks by image source to make UI adjustments instant (<2ms)
 const maskCache = new Map<string, { maskCanvas: HTMLCanvasElement; origW: number; origH: number }>();
 
-async function createSegmentator(preferWasm = false): Promise<ImageSegmentationPipeline> {
-  const config = await AutoConfig.from_pretrained("briaai/RMBG-1.4");
-  config.model_type = "segformer";
-
-  const isWebGPUAvailable =
-    !preferWasm &&
-    typeof navigator !== "undefined" &&
-    "gpu" in navigator &&
-    Boolean(navigator.gpu);
-
-  if (isWebGPUAvailable) {
-    try {
-      console.log("[StickerCanvas] Attempting RMBG-1.4 on WebGPU (fp32)…");
-      const seg = await pipeline("image-segmentation", "briaai/RMBG-1.4", {
-        config,
-        device: "webgpu",
-        dtype: "fp32",
-      });
-      activeBackend = "webgpu";
-      console.log("[StickerCanvas] RMBG-1.4 WebGPU pipeline ready!");
-      return seg as ImageSegmentationPipeline;
-    } catch (gpuErr) {
-      console.warn("[StickerCanvas] WebGPU initialization failed, switching to WASM (q8):", gpuErr);
-    }
-  }
-
-  // Quantized q8 ONNX model is only ~42MB (vs 168MB), loads 4x faster and runs smoothly with SIMD
-  console.log("[StickerCanvas] Initializing RMBG-1.4 on WASM (q8 with SIMD)…");
-  const seg = await pipeline("image-segmentation", "briaai/RMBG-1.4", {
-    config,
-    device: "wasm",
-    dtype: "q8",
-  });
-  activeBackend = "wasm";
-  console.log("[StickerCanvas] RMBG-1.4 WASM (q8) pipeline ready!");
-  return seg as ImageSegmentationPipeline;
+function getCacheKey(imageElement: HTMLImageElement): string {
+  return imageElement.src || imageElement.currentSrc || "";
 }
 
-function getSegmentator(forceWasm = false): Promise<ImageSegmentationPipeline> {
-  if (pipelineInstance && (!forceWasm || activeBackend === "wasm")) {
-    return Promise.resolve(pipelineInstance);
+// ─── Web Worker Singleton ────────────────────────────────────────
+
+let workerInstance: Worker | null = null;
+let workerInitPromise: Promise<Worker> | null = null;
+let activeJobId = 0;
+
+interface ActiveJob {
+  resolve: (result: { maskBitmap: ImageBitmap; origW: number; origH: number }) => void;
+  reject: (err: Error) => void;
+  onProgress?: (stage: string, progress: number) => void;
+}
+
+const activeJobs = new Map<number, ActiveJob>();
+
+function initWorker(): Promise<Worker> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Web Worker cannot be initialized on the server"));
   }
 
-  if (forceWasm) {
-    pipelineInstance = null;
-    pipelineLoadingPromise = null;
+  if (workerInstance) {
+    return Promise.resolve(workerInstance);
   }
 
-  if (!pipelineLoadingPromise) {
-    pipelineLoadingPromise = createSegmentator(forceWasm)
-      .then((inst) => {
-        pipelineInstance = inst;
-        return inst;
-      })
-      .catch((err) => {
-        console.error("ML model load error:", err);
-        pipelineLoadingPromise = null;
-        throw err;
-      });
+  if (workerInitPromise) {
+    return workerInitPromise;
   }
 
-  return pipelineLoadingPromise;
+  notifyStatusChange({ loading: true, error: null });
+
+  workerInitPromise = new Promise<Worker>((resolve, reject) => {
+    try {
+      const worker = new Worker(
+        new URL("../workers/bg-removal.worker.ts", import.meta.url),
+        { type: "module" }
+      );
+
+      worker.onmessage = (event: MessageEvent) => {
+        const data = event.data;
+        if (!data) return;
+
+        if (data.type === "ready") {
+          workerInstance = worker;
+          notifyStatusChange({
+            ready: true,
+            loading: false,
+            backend: data.backend,
+            error: null,
+          });
+          resolve(worker);
+          return;
+        }
+
+        if (data.type === "progress") {
+          const job = activeJobs.get(data.jobId);
+          if (job && job.onProgress) {
+            job.onProgress(data.stage, data.progress);
+          }
+          return;
+        }
+
+        if (data.type === "result") {
+          const job = activeJobs.get(data.jobId);
+          if (job) {
+            activeJobs.delete(data.jobId);
+            job.resolve({
+              maskBitmap: data.maskBitmap,
+              origW: data.originalWidth,
+              origH: data.originalHeight,
+            });
+          }
+          return;
+        }
+
+        if (data.type === "error") {
+          if (data.jobId !== undefined) {
+            const job = activeJobs.get(data.jobId);
+            if (job) {
+              activeJobs.delete(data.jobId);
+              job.reject(new Error(data.message || "Worker inference error"));
+            }
+          }
+          if (data.fatal) {
+            notifyStatusChange({
+              loading: false,
+              ready: false,
+              error: data.message || "Model failed to load",
+            });
+            reject(new Error(data.message));
+          }
+        }
+      };
+
+      worker.onerror = (err) => {
+        console.error("[StickerCanvas] Worker error:", err);
+        notifyStatusChange({
+          loading: false,
+          error: "Worker runtime error",
+        });
+        reject(new Error("Background removal worker encountered an error"));
+      };
+
+      // Send initial init message to load model and run warm-up
+      worker.postMessage({ type: "init" });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      notifyStatusChange({ loading: false, error: errMsg });
+      reject(err);
+    }
+  });
+
+  return workerInitPromise;
+}
+
+/**
+ * Cancel all currently active background removal jobs
+ */
+export function cancelAllBackgroundJobs(): void {
+  if (workerInstance) {
+    for (const jobId of Array.from(activeJobs.keys())) {
+      try {
+        workerInstance.postMessage({ type: "cancel", jobId });
+      } catch {
+        // ignore
+      }
+      const job = activeJobs.get(jobId);
+      if (job) {
+        job.reject(new Error("Cancelled"));
+      }
+    }
+    activeJobs.clear();
+  }
 }
 
 /**
  * Preload the ML model in the background (called on initial app mount)
  */
 export function preloadModel(): void {
-  getSegmentator().catch(() => {
-    // Silently continue
-  });
+  if (typeof window !== "undefined") {
+    initWorker().catch(() => {
+      // Silently catch background preload errors; fallback will handle on demand
+    });
+  }
 }
 
 // ─── Instant Pre-Checks & Fast Utilities ──────────────────────────
@@ -128,7 +230,7 @@ function checkAlreadyTransparent(data: Uint8ClampedArray, width: number, height:
     totalSampled += 2;
   }
   for (let y = 0; y < height; y += stepY) {
-    if (data[(y * width) * 4 + 3] < 30) transparentCount++;
+    if (data[y * width * 4 + 3] < 30) transparentCount++;
     if (data[(y * width + width - 1) * 4 + 3] < 30) transparentCount++;
     totalSampled += 2;
   }
@@ -176,182 +278,82 @@ function getAlphaBoundingBox(
   return { minX, minY, maxX, maxY };
 }
 
-// ─── Main Body Saliency & Noise Rejection Filter ─────────────────
+// ─── Halo Decontamination Filter ─────────────────────────────────
 
 /**
- * Isolates the main subject/body from raw RMBG-1.4 predictions:
- * - Employs connected component labeling and spatial saliency scoring.
- * - Prioritizes the primary body / center of interest.
- * - Retains significant co-subjects and proximate accessories (bags, hats, shoes, held items).
- * - Discards random peripheral background objects, corner noise, and distant clutter.
- * - Applies smooth Hermite subpixel anti-aliasing curve for crisp, natural contours.
+ * Halo / Fringe Decontamination:
+ * Removes color bleeding from the background on semi-transparent edge pixels (alpha between 10 and 245).
+ * Samples nearby confident foreground pixels (alpha >= 245) to colorize edge pixels with true subject color,
+ * eliminating harsh white or dark fringe around hair, fur, and thin details.
  */
-function refineMainSubjectMask(maskData: Uint8Array, w: number, h: number): Uint8ClampedArray {
-  const size = w * h;
-  const labels = new Int32Array(size);
-  let currentLabel = 0;
-  const q = new Int32Array(size);
+function decontaminateHalos(
+  imgData: ImageData,
+  width: number,
+  height: number,
+  bbox: BoundingBox
+): void {
+  const data = imgData.data;
+  const startX = Math.max(0, bbox.minX - 1);
+  const endX = Math.min(width - 1, bbox.maxX + 1);
+  const startY = Math.max(0, bbox.minY - 1);
+  const endY = Math.min(height - 1, bbox.maxY + 1);
 
-  interface Component {
-    label: number;
-    area: number;
-    score: number;
-    minX: number;
-    maxX: number;
-    minY: number;
-    maxY: number;
-    centerX: number;
-    centerY: number;
-  }
-  const components: Component[] = [];
+  const radius = 2;
 
-  // 1. Connected Component Labeling on confident foreground (maskData >= 55)
-  for (let y = 0; y < h; y++) {
-    const rowOffset = y * w;
-    for (let x = 0; x < w; x++) {
-      const idx = rowOffset + x;
-      if (maskData[idx] < 55 || labels[idx] !== 0) continue;
+  for (let y = startY; y <= endY; y++) {
+    const rowOffset = y * width * 4;
+    for (let x = startX; x <= endX; x++) {
+      const idx = rowOffset + x * 4;
+      const alpha = data[idx + 3];
 
-      currentLabel++;
-      labels[idx] = currentLabel;
-      q[0] = idx;
-      let head = 0, tail = 1;
-      let area = 0, sumX = 0, sumY = 0;
-      let minX = x, maxX = x, minY = y, maxY = y;
+      // Only decontaminate transition edge pixels
+      if (alpha >= 10 && alpha < 240) {
+        let sumR = 0;
+        let sumG = 0;
+        let sumB = 0;
+        let count = 0;
 
-      while (head < tail) {
-        const curr = q[head++];
-        area++;
-        const cx = curr % w;
-        const cy = (curr / w) | 0;
-        sumX += cx;
-        sumY += cy;
-        if (cx < minX) minX = cx;
-        if (cx > maxX) maxX = cx;
-        if (cy < minY) minY = cy;
-        if (cy > maxY) maxY = cy;
+        for (let dy = -radius; dy <= radius; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= height) continue;
+          const nRow = ny * width * 4;
 
-        const left = cx > 0 ? curr - 1 : -1;
-        const right = cx < w - 1 ? curr + 1 : -1;
-        const up = cy > 0 ? curr - w : -1;
-        const down = cy < h - 1 ? curr + w : -1;
+          for (let dx = -radius; dx <= radius; dx++) {
+            const nx = x + dx;
+            if (nx < 0 || nx >= width) continue;
+            const nIdx = nRow + nx * 4;
 
-        for (const n of [left, right, up, down]) {
-          if (n !== -1 && maskData[n] >= 55 && labels[n] === 0) {
-            labels[n] = currentLabel;
-            q[tail++] = n;
-          }
-        }
-      }
-
-      const centerX = sumX / area;
-      const centerY = sumY / area;
-      // Distance from center of image (normalized 0 to 1)
-      const distFromCenter = Math.hypot(centerX / w - 0.5, centerY / h - 0.5);
-      // Saliency score: larger mass + closer to center of focus
-      const score = area * (1 - 0.45 * distFromCenter);
-
-      components.push({
-        label: currentLabel,
-        area,
-        score,
-        minX,
-        maxX,
-        minY,
-        maxY,
-        centerX,
-        centerY,
-      });
-    }
-  }
-
-  // 2. Select primary main body and legitimate connected/proximate elements
-  const acceptedLabels = new Set<number>();
-
-  if (components.length > 0) {
-    components.sort((a, b) => b.score - a.score);
-    const primary = components[0];
-    acceptedLabels.add(primary.label);
-
-    // Accept secondary components if:
-    // - Significant mass (>= 12% of primary body, e.g. second person or large pet)
-    // - OR in spatial proximity to primary body (held cup, phone, purse, shoes)
-    const proximityMargin = Math.max(20, Math.min(w, h) * 0.06);
-
-    for (let i = 1; i < components.length; i++) {
-      const c = components[i];
-      const isSignificantSize = c.area >= primary.area * 0.12;
-      const isNearby =
-        c.minX <= primary.maxX + proximityMargin &&
-        c.maxX >= primary.minX - proximityMargin &&
-        c.minY <= primary.maxY + proximityMargin &&
-        c.maxY >= primary.minY - proximityMargin;
-
-      // Filter out small distant background clutter, wall pictures, ceiling lights
-      if ((isSignificantSize || isNearby) && c.area > 40) {
-        acceptedLabels.add(c.label);
-      }
-    }
-  }
-
-  // 3. Generate smooth, anti-aliased alpha map
-  const finalAlpha = new Uint8ClampedArray(size * 4);
-
-  for (let i = 0; i < size; i++) {
-    const lbl = labels[i];
-    const val = maskData[i];
-
-    if (acceptedLabels.has(lbl)) {
-      // Direct main subject interior
-      if (val >= 140) {
-        finalAlpha[i * 4 + 3] = 255;
-      } else if (val <= 30) {
-        finalAlpha[i * 4 + 3] = 0;
-      } else {
-        const t = (val - 30) / (140 - 30);
-        finalAlpha[i * 4 + 3] = Math.round(t * t * (3 - 2 * t) * 255);
-      }
-    } else if (components.length === 0 && val >= 60) {
-      // Fallback if no single distinct component formed
-      finalAlpha[i * 4 + 3] = val;
-    } else {
-      // Check for soft anti-aliased boundary around accepted subjects (hair, soft edge)
-      const cx = i % w;
-      const cy = (i / w) | 0;
-      let nearAccepted = false;
-
-      if (val > 35) {
-        for (let dy = -2; dy <= 2 && !nearAccepted; dy++) {
-          for (let dx = -2; dx <= 2 && !nearAccepted; dx++) {
-            const nx = cx + dx;
-            const ny = cy + dy;
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-              const nIdx = ny * w + nx;
-              if (acceptedLabels.has(labels[nIdx])) {
-                nearAccepted = true;
-              }
+            // Sample confident solid foreground
+            if (data[nIdx + 3] >= 245) {
+              sumR += data[nIdx];
+              sumG += data[nIdx + 1];
+              sumB += data[nIdx + 2];
+              count++;
             }
           }
         }
-      }
 
-      if (nearAccepted && val > 35) {
-        const t = (val - 35) / (140 - 35);
-        finalAlpha[i * 4 + 3] = Math.round(Math.min(1, Math.max(0, t * t * (3 - 2 * t))) * 255);
-      } else {
-        finalAlpha[i * 4 + 3] = 0;
+        if (count > 0) {
+          const avgR = sumR / count;
+          const avgG = sumG / count;
+          const avgB = sumB / count;
+
+          // Blend edge color toward foreground color based on alpha
+          const blendFactor = 1 - alpha / 255;
+          data[idx] = Math.round(data[idx] * (1 - blendFactor) + avgR * blendFactor);
+          data[idx + 1] = Math.round(data[idx + 1] * (1 - blendFactor) + avgG * blendFactor);
+          data[idx + 2] = Math.round(data[idx + 2] * (1 - blendFactor) + avgB * blendFactor);
+        }
       }
     }
   }
-
-  return finalAlpha;
 }
 
 // ─── High-Speed Canvas Compositor & Auto-Trim ─────────────────────
 
 function createFinalSticker(
   srcCanvas: HTMLCanvasElement,
-  maskCanvas: HTMLCanvasElement | null,
+  maskSource: HTMLCanvasElement | ImageBitmap | null,
   options: BgRemovalOptions
 ): string {
   const srcW = srcCanvas.width;
@@ -366,36 +368,45 @@ function createFinalSticker(
 
   tCtx.drawImage(srcCanvas, 0, 0);
 
-  if (maskCanvas) {
+  if (maskSource) {
     // Hardware-accelerated bilinear mask application
     tCtx.globalCompositeOperation = "destination-in";
     tCtx.imageSmoothingEnabled = true;
     tCtx.imageSmoothingQuality = "high";
-    tCtx.drawImage(maskCanvas, 0, 0, srcW, srcH);
+    tCtx.drawImage(maskSource, 0, 0, srcW, srcH);
     tCtx.globalCompositeOperation = "source-over";
+  }
+
+  // 2. Read composited pixels once for halo decontamination, opacity, and bounding box
+  const imgData = tCtx.getImageData(0, 0, srcW, srcH);
+  const data = imgData.data;
+
+  const bbox = getAlphaBoundingBox(data, srcW, srcH, 15);
+
+  // Apply halo decontamination if subject was cut out
+  if (bbox && maskSource) {
+    decontaminateHalos(imgData, srcW, srcH, bbox);
   }
 
   // Apply overall opacity if specified
   const opacity = Math.max(0.05, Math.min(1, options.opacity ?? 1));
   if (opacity < 1) {
-    const imgData = tCtx.getImageData(0, 0, srcW, srcH);
-    const d = imgData.data;
-    for (let i = 3; i < d.length; i += 4) {
-      if (d[i] > 0) d[i] = Math.round(d[i] * opacity);
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] > 0) {
+        data[i] = Math.round(data[i] * opacity);
+      }
     }
-    tCtx.putImageData(imgData, 0, 0);
   }
 
-  // 2. Smart auto-trim to snug subject bounding box
-  const subjectData = tCtx.getImageData(0, 0, srcW, srcH).data;
-  const bbox = getAlphaBoundingBox(subjectData, srcW, srcH, 15);
+  tCtx.putImageData(imgData, 0, 0);
 
+  // 3. Smart auto-trim to snug subject bounding box
   let cropX = 0;
   let cropY = 0;
   let cropW = srcW;
   let cropH = srcH;
 
-  if (bbox) {
+  if (options.autoTrim !== false && bbox) {
     const margin = 8;
     cropX = Math.max(0, bbox.minX - margin);
     cropY = Math.max(0, bbox.minY - margin);
@@ -405,7 +416,7 @@ function createFinalSticker(
     cropH = bottomY - cropY + 1;
   }
 
-  // 3. Create cropped output canvas
+  // 4. Create cropped output canvas
   const pad = options.addStickerBorder ? (options.borderWidth || 8) + 4 : 0;
   const outW = cropW + pad * 2;
   const outH = cropH + pad * 2;
@@ -418,7 +429,7 @@ function createFinalSticker(
 
   oCtx.drawImage(tempCanvas, cropX, cropY, cropW, cropH, pad, pad, cropW, cropH);
 
-  // 4. Apply die-cut vinyl border if requested
+  // 5. Apply die-cut vinyl border if requested
   if (options.addStickerBorder) {
     const borderCanvas = document.createElement("canvas");
     borderCanvas.width = outW;
@@ -450,116 +461,7 @@ function createFinalSticker(
   return outCanvas.toDataURL("image/png");
 }
 
-// ─── Core ML-Based Background Removal ────────────────────────────
-
-/**
- * High-speed background removal using RMBG-1.4 with automatic WASM/WebGPU fallback.
- */
-async function removeBackgroundML(
-  imageElement: HTMLImageElement,
-  options: BgRemovalOptions
-): Promise<string> {
-  const origW = imageElement.naturalWidth || imageElement.width;
-  const origH = imageElement.naturalHeight || imageElement.height;
-
-  // Keep full source canvas for crisp high-resolution output
-  const srcCanvas = document.createElement("canvas");
-  srcCanvas.width = origW;
-  srcCanvas.height = origH;
-  const srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true });
-  if (!srcCtx) throw new Error("Could not create source canvas");
-  srcCtx.drawImage(imageElement, 0, 0);
-
-  // 1. Instant check: Is the image already transparent? (<1ms)
-  const previewData = srcCtx.getImageData(0, 0, origW, origH).data;
-  if (checkAlreadyTransparent(previewData, origW, origH)) {
-    options.onProgress?.("Instant cutout…", 1);
-    return createFinalSticker(srcCanvas, null, options);
-  }
-
-  // 2. Check mask cache (makes slider adjustments instant)
-  const cacheKey = imageElement.src || "";
-  let maskCanvas: HTMLCanvasElement | null = null;
-
-  if (cacheKey && maskCache.has(cacheKey)) {
-    const cached = maskCache.get(cacheKey)!;
-    maskCanvas = cached.maskCanvas;
-  } else {
-    // 3. Optimal neural network inference resolution (512–640px)
-    // 640px provides razor-sharp boundary details while running 5x faster than 1024px
-    const maxInferenceDim = 640;
-    let infW = origW;
-    let infH = origH;
-    if (infW > maxInferenceDim || infH > maxInferenceDim) {
-      const scale = maxInferenceDim / Math.max(infW, infH);
-      infW = Math.max(64, Math.round(infW * scale));
-      infH = Math.max(64, Math.round(infH * scale));
-    }
-
-    const infCanvas = document.createElement("canvas");
-    infCanvas.width = infW;
-    infCanvas.height = infH;
-    const infCtx = infCanvas.getContext("2d", { willReadFrequently: true });
-    if (!infCtx) throw new Error("Could not create inference canvas");
-    infCtx.imageSmoothingEnabled = true;
-    infCtx.imageSmoothingQuality = "high";
-    infCtx.drawImage(imageElement, 0, 0, infW, infH);
-    const infImgData = infCtx.getImageData(0, 0, infW, infH);
-
-    options.onProgress?.("Detecting main body…", 0.35);
-
-    // Run inference with fail-safe WebGPU -> WASM fallback
-    const rawImg = new RawImage(infImgData.data, infW, infH, 4);
-    let result;
-
-    try {
-      const seg = await getSegmentator(false);
-      result = await seg(rawImg);
-    } catch (runErr) {
-      console.warn("[StickerCanvas] Primary pipeline error, falling back to WASM q8:", runErr);
-      options.onProgress?.("Optimizing engine…", 0.45);
-      const segWasm = await getSegmentator(true);
-      result = await segWasm(rawImg);
-    }
-
-    const maskOutput = result[0];
-    if (!maskOutput || !maskOutput.mask) {
-      throw new Error("No segmentation mask returned");
-    }
-
-    const maskRaw = maskOutput.mask as RawImage;
-    const maskW = maskRaw.width;
-    const maskH = maskRaw.height;
-    const maskData = maskRaw.data as Uint8Array;
-
-    options.onProgress?.("Refining edges & contours…", 0.85);
-
-    // 4. Refine mask: isolate main body, reject background clutter, apply smooth anti-aliasing
-    const refinedAlpha = refineMainSubjectMask(maskData, maskW, maskH);
-
-    maskCanvas = document.createElement("canvas");
-    maskCanvas.width = maskW;
-    maskCanvas.height = maskH;
-    const mCtx = maskCanvas.getContext("2d");
-    if (!mCtx) throw new Error("Could not create mask canvas");
-    const maskImgData = mCtx.createImageData(maskW, maskH);
-    maskImgData.data.set(refinedAlpha);
-    mCtx.putImageData(maskImgData, 0, 0);
-
-    if (cacheKey) {
-      maskCache.set(cacheKey, { maskCanvas, origW, origH });
-      if (maskCache.size > 20) {
-        const firstKey = maskCache.keys().next().value;
-        if (firstKey) maskCache.delete(firstKey);
-      }
-    }
-  }
-
-  options.onProgress?.("Done!", 1);
-  return createFinalSticker(srcCanvas, maskCanvas, options);
-}
-
-// ─── Resilient Saliency Flood-Fill Fallback ──────────────────────
+// ─── Resilient Flood-Fill Fallback ───────────────────────────────
 
 function removeBackgroundFloodFill(
   imageElement: HTMLImageElement,
@@ -586,7 +488,6 @@ function removeBackgroundFloodFill(
 
       if (options.removeBg !== false) {
         if (!checkAlreadyTransparent(data, width, height)) {
-          // Perimeter sample seeds
           const perimeterSeeds: [number, number, number][] = [];
           const step = Math.max(1, Math.floor(Math.min(origW, origH) / 16));
 
@@ -673,21 +574,112 @@ function removeBackgroundFloodFill(
 
 /**
  * Remove background from an image.
- * Uses high-speed RMBG-1.4 with automatic WASM q8 fallback.
+ * Uses off-thread Web Worker with WebGPU / WASM SIMD acceleration,
+ * instant transparent image fast-path, and automatic fallback.
  */
 export async function removeBackgroundFromImage(
   imageElement: HTMLImageElement,
   options: BgRemovalOptions = { removeBg: true, opacity: 1, addStickerBorder: false }
 ): Promise<string> {
-  if (options.removeBg === false) {
-    return removeBackgroundFloodFill(imageElement, { ...options, removeBg: false });
+  const origW = imageElement.naturalWidth || imageElement.width;
+  const origH = imageElement.naturalHeight || imageElement.height;
+
+  if (origW === 0 || origH === 0) {
+    throw new Error("Invalid image dimensions");
   }
 
+  // Draw source image to source canvas
+  const srcCanvas = document.createElement("canvas");
+  srcCanvas.width = origW;
+  srcCanvas.height = origH;
+  const srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true });
+  if (!srcCtx) throw new Error("Could not create source canvas");
+  srcCtx.drawImage(imageElement, 0, 0);
+
+  // If user requested NOT to remove background, return original with border/opacity
+  if (options.removeBg === false) {
+    return createFinalSticker(srcCanvas, null, options);
+  }
+
+  // 1. Instant check: Is the image already transparent? (<1ms)
+  const previewData = srcCtx.getImageData(0, 0, origW, origH).data;
+  if (checkAlreadyTransparent(previewData, origW, origH)) {
+    options.onProgress?.("Instant cutout…", 1);
+    return createFinalSticker(srcCanvas, null, options);
+  }
+
+  // 2. Check mask cache (instant slider updates <2ms)
+  const cacheKey = getCacheKey(imageElement);
+  if (cacheKey && maskCache.has(cacheKey)) {
+    const cached = maskCache.get(cacheKey)!;
+    options.onProgress?.("Ready!", 1);
+    return createFinalSticker(srcCanvas, cached.maskCanvas, options);
+  }
+
+  // 3. Offload heavy ML inference & refinement to Web Worker
   try {
-    return await removeBackgroundML(imageElement, options);
-  } catch (err) {
-    console.warn("[StickerCanvas] ML segmentation failed, falling back to flood-fill:", err);
-    options.onProgress?.("Using basic mode…", 0.5);
+    const worker = await initWorker();
+    const jobId = ++activeJobId;
+
+    // Create transferable ImageBitmap from source
+    const imageBitmap = await createImageBitmap(srcCanvas);
+
+    options.onProgress?.("Starting AI analysis…", 0.1);
+
+    const workerResult = await new Promise<{
+      maskBitmap: ImageBitmap;
+      origW: number;
+      origH: number;
+    }>((resolve, reject) => {
+      activeJobs.set(jobId, {
+        resolve,
+        reject,
+        onProgress: options.onProgress,
+      });
+
+      worker.postMessage(
+        {
+          type: "process",
+          jobId,
+          imageBitmap,
+          options: {
+            tolerance: options.tolerance,
+            feather: options.feather,
+            removeBg: options.removeBg,
+            quality: options.quality || "balanced",
+          },
+        },
+        [imageBitmap]
+      );
+    });
+
+    // Store mask in persistent cache canvas for instant slider re-renders
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = origW;
+    maskCanvas.height = origH;
+    const mCtx = maskCanvas.getContext("2d");
+    if (mCtx) {
+      mCtx.drawImage(workerResult.maskBitmap, 0, 0);
+      try {
+        workerResult.maskBitmap.close();
+      } catch {
+        // ignore
+      }
+
+      if (cacheKey) {
+        maskCache.set(cacheKey, { maskCanvas, origW, origH });
+        if (maskCache.size > 20) {
+          const firstKey = maskCache.keys().next().value;
+          if (firstKey) maskCache.delete(firstKey);
+        }
+      }
+    }
+
+    options.onProgress?.("Done!", 1);
+    return createFinalSticker(srcCanvas, maskCanvas, options);
+  } catch (workerErr) {
+    console.warn("[StickerCanvas] Worker ML segmentation failed, using resilient fallback:", workerErr);
+    options.onProgress?.("Using standard mode…", 0.5);
     return removeBackgroundFloodFill(imageElement, options);
   }
 }
@@ -732,3 +724,59 @@ export async function smartAutoCreateSticker(
     naturalHeight: finalH,
   };
 }
+
+/**
+ * Universal background removal helper for standalone tool and studio.
+ * Returns both originalUrl and transparentUrl with matched natural dimensions (autoTrim: false).
+ */
+export async function removeBackground(
+  fileOrUrl: File | Blob | string,
+  options?: Partial<BgRemovalOptions>
+): Promise<{
+  originalUrl: string;
+  transparentUrl: string;
+  width: number;
+  height: number;
+}> {
+  let originalUrl: string;
+  let shouldRevoke = false;
+
+  if (typeof fileOrUrl === "string") {
+    originalUrl = fileOrUrl;
+  } else {
+    originalUrl = URL.createObjectURL(fileOrUrl);
+    shouldRevoke = true;
+  }
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = (e) => reject(e);
+      img.src = originalUrl;
+    });
+
+    const transparentUrl = await removeBackgroundFromImage(img, {
+      autoTrim: false,
+      removeBg: true,
+      opacity: 1,
+      addStickerBorder: false,
+      ...options,
+    });
+
+    return {
+      originalUrl,
+      transparentUrl,
+      width: img.naturalWidth || img.width,
+      height: img.naturalHeight || img.height,
+    };
+  } catch (err) {
+    if (shouldRevoke) {
+      URL.revokeObjectURL(originalUrl);
+    }
+    throw err;
+  }
+}
+

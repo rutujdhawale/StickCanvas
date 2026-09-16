@@ -16,11 +16,14 @@ import {
   FlipVertical,
   Scissors,
   Wand2,
+  RotateCcw,
+  Sparkles,
 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
 import { StickerObject } from "@/types/editor";
 import { BackgroundPanel } from "./BackgroundPanel";
+import { removeBackground } from "@/lib/bg-remove";
 
 export const InspectorPanel: React.FC = () => {
   const {
@@ -28,6 +31,7 @@ export const InspectorPanel: React.FC = () => {
     selectedIds,
     assets,
     updateObject,
+    updateAsset,
     removeObject,
     select,
     bringForward,
@@ -36,9 +40,16 @@ export const InspectorPanel: React.FC = () => {
     pushHistory,
   } = useEditorStore();
 
-  const { inspectorPanelOpen, toggleInspectorPanel, openStickerMaker } = useUIStore();
+  const {
+    inspectorPanelOpen,
+    toggleInspectorPanel,
+    openStickerMaker,
+    showToast,
+    setProcessing,
+  } = useUIStore();
   const [lockRatio, setLockRatio] = useState(true);
   const [tab, setTab] = useState<"object" | "canvas">("object");
+  const [isRemovingBg, setIsRemovingBg] = useState(false);
 
   if (!inspectorPanelOpen) return null;
 
@@ -444,25 +455,85 @@ export const InspectorPanel: React.FC = () => {
 
             {/* ─── Sticker Cutout Section ─── */}
             {selectedAsset && (selectedAsset.type === "upload" || selectedAsset.type === "paste") && (
-              <div className="pt-3 border-t border-[#D9D8D2] space-y-2">
+              <div className="pt-3 border-t border-[#D9D8D2] space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-[#171717] flex items-center gap-1.5">
                     <Scissors size={13} className="text-[#FF5A36]" />
-                    Sticker Cutout
+                    Background Removal
                   </span>
-                  <span className="text-[10px] text-[#2E7D32] font-semibold bg-[#E8F5E9] px-2 py-0.5 rounded-full border border-[#C8E6C9]">
-                    Auto-Cutout Active ✓
-                  </span>
+                  {selectedAsset.isCutout ? (
+                    <span className="text-[10px] text-[#2E7D32] font-semibold bg-[#E8F5E9] px-2 py-0.5 rounded-full border border-[#C8E6C9]">
+                      Cutout Active ✓
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-[#6F6F6A] font-medium bg-[#ECEBE6] px-2 py-0.5 rounded-full border border-[#D9D8D2]">
+                      Original BG
+                    </span>
+                  )}
                 </div>
-                <p className="text-[11px] text-[#6F6F6A] leading-relaxed">
-                  Smart boundary eraser extracted this subject and softened edges.
-                </p>
+
+                {/* Primary Action Button: Remove BG or Restore Original */}
+                {selectedAsset.isCutout ? (
+                  <button
+                    onClick={() => {
+                      if (!selectedAsset.originalSrc) return;
+                      updateAsset(selectedAsset.id, {
+                        src: selectedAsset.originalSrc,
+                        thumbnailSrc: selectedAsset.originalSrc,
+                        isCutout: false,
+                      });
+                      pushHistory();
+                      showToast("Restored original background ✓");
+                    }}
+                    disabled={!selectedAsset.originalSrc}
+                    className="w-full py-1.5 px-2.5 bg-white hover:bg-[#ECEBE6] text-[#171717] border border-[#D9D8D2] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 shadow-2xs transition-colors active:scale-98 disabled:opacity-50"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Restore Original Background</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      setIsRemovingBg(true);
+                      setProcessing(true, "Removing background…");
+                      try {
+                        const res = await removeBackground(selectedAsset.src, {
+                          autoTrim: false,
+                          onProgress: (_stage, progress) => {
+                            setProcessing(true, `Refining edges (${Math.round(progress * 100)}%)…`);
+                          },
+                        });
+                        updateAsset(selectedAsset.id, {
+                          originalSrc: selectedAsset.originalSrc || selectedAsset.src,
+                          src: res.transparentUrl,
+                          thumbnailSrc: res.transparentUrl,
+                          isCutout: true,
+                        });
+                        pushHistory();
+                        showToast("Background removed ✨");
+                      } catch (err) {
+                        console.error("Studio background removal failed:", err);
+                        showToast("Failed to remove background");
+                      } finally {
+                        setIsRemovingBg(false);
+                        setProcessing(false);
+                      }
+                    }}
+                    disabled={isRemovingBg}
+                    className="w-full py-2 px-2.5 bg-[#FF5A36] hover:bg-[#e84e2c] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-all active:scale-98 disabled:opacity-50"
+                  >
+                    <Sparkles size={13} />
+                    <span>{isRemovingBg ? "Processing…" : "Remove Background"}</span>
+                  </button>
+                )}
+
+                {/* Fine-Tune Cutout / Eraser modal button */}
                 <button
                   onClick={() => openStickerMaker(selectedAsset.src, selectedObj.name)}
-                  className="w-full py-1.5 px-2.5 bg-white hover:bg-[#ECEBE6] text-[#171717] border border-[#D9D8D2] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 shadow-2xs transition-colors active:scale-98"
+                  className="w-full py-1.5 px-2.5 bg-white hover:bg-[#ECEBE6] text-[#6F6F6A] hover:text-[#171717] border border-[#D9D8D2] rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 shadow-2xs transition-colors active:scale-98"
                 >
                   <Wand2 size={13} className="text-[#FF5A36]" />
-                  <span>Fine-Tune Cutout / Eraser</span>
+                  <span>Manual Eraser / Refine</span>
                 </button>
               </div>
             )}

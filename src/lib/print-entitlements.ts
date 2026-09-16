@@ -4,7 +4,7 @@
 const ENTITLEMENT_KEY = "stickercanvas_print_entitlements";
 
 export interface PrintEntitlement {
-  type: "single_sheet" | "pack" | "subscription" | "dev_pass";
+  type: "single_sheet" | "sheet_pack" | "pack" | "pro_creator" | "subscription" | "dev_pass";
   credits: number;
   unlockedAt: number;
   expiresAt?: number;
@@ -42,7 +42,7 @@ export function savePrintEntitlement(entitlement: PrintEntitlement): void {
 export function hasActivePrintAccess(): boolean {
   const ent = getPrintEntitlements();
   if (!ent) return false;
-  if (ent.type === "subscription" || ent.type === "dev_pass") return true;
+  if (ent.type === "subscription" || ent.type === "pro_creator" || ent.type === "dev_pass") return true;
   return ent.credits > 0;
 }
 
@@ -50,7 +50,7 @@ export function consumePrintCredit(): boolean {
   const ent = getPrintEntitlements();
   if (!ent) return false;
 
-  if (ent.type === "subscription" || ent.type === "dev_pass") {
+  if (ent.type === "subscription" || ent.type === "pro_creator" || ent.type === "dev_pass") {
     return true;
   }
 

@@ -13,6 +13,7 @@ interface UIState {
   stickerMakerImage: string | null; // data URL of image to process
   stickerMakerInitialName: string;
   previewModalAsset: any | null; // Asset to preview
+  feedbackModalOpen: boolean;
 
   // Export
   exportOptions: ExportOptions;
@@ -24,10 +25,15 @@ interface UIState {
   toastMessage: string | null;
   toastVisible: boolean;
 
+  // Processing
+  isProcessing: boolean;
+  processingStage: string;
+
   // Active tool
   isPanning: boolean;
 
   // ─── Actions ────────────────────────────────────────────────
+  setProcessing: (isProcessing: boolean, stage?: string) => void;
   toggleAssetsPanel: () => void;
   toggleInspectorPanel: () => void;
   openBackgroundDrawer: () => void;
@@ -43,6 +49,9 @@ interface UIState {
 
   openAssetPreview: (asset: any) => void;
   closeAssetPreview: () => void;
+
+  openFeedbackModal: () => void;
+  closeFeedbackModal: () => void;
 
   showContextMenu: (x: number, y: number, targetId: string | null) => void;
   hideContextMenu: () => void;
@@ -63,6 +72,7 @@ export const useUIStore = create<UIState>((set) => ({
   stickerMakerImage: null,
   stickerMakerInitialName: "Custom Sticker",
   previewModalAsset: null,
+  feedbackModalOpen: false,
 
   exportOptions: {
     format: "png",
@@ -80,9 +90,14 @@ export const useUIStore = create<UIState>((set) => ({
   toastMessage: null,
   toastVisible: false,
 
+  isProcessing: false,
+  processingStage: "",
+
   isPanning: false,
 
   // ─── Actions ──────────────────────────────────────────────────
+  setProcessing: (isProcessing, stage = "") =>
+    set({ isProcessing, processingStage: stage }),
 
   toggleAssetsPanel: () =>
     set((s) => ({ assetsPanelOpen: !s.assetsPanelOpen })),
@@ -111,6 +126,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   openAssetPreview: (asset) => set({ previewModalAsset: asset }),
   closeAssetPreview: () => set({ previewModalAsset: null }),
+
+  openFeedbackModal: () => set({ feedbackModalOpen: true }),
+  closeFeedbackModal: () => set({ feedbackModalOpen: false }),
 
   showContextMenu: (x, y, targetId) =>
     set({ contextMenu: { visible: true, x, y, targetId } }),

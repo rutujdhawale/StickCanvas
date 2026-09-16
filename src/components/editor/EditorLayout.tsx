@@ -18,7 +18,11 @@ import { smartAutoCreateSticker, preloadModel } from "@/lib/bg-remove";
 
 import { AssetPreviewModal } from "./AssetPreviewModal";
 import { MobileBottomBar } from "./MobileBottomBar";
+import { MobileAddSheet } from "./MobileAddSheet";
+import { PasteLinkModal } from "./PasteLinkModal";
 import { BackgroundPanel } from "./BackgroundPanel";
+import { AuthModal } from "@/components/auth/AuthModal";
+import { FeedbackModal } from "@/components/common/FeedbackModal";
 
 export const EditorLayout: React.FC = () => {
   const engineRef = useRef<EditorEngine | null>(null);
@@ -36,11 +40,23 @@ export const EditorLayout: React.FC = () => {
     backgroundDrawerOpen,
     closeBackgroundDrawer,
     showToast,
+    isProcessing: uiProcessing,
+    processingStage: uiProcessingStage,
   } = useUIStore();
 
   // Processing overlay state
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStage, setProcessingStage] = useState("");
+  const [localProcessing, setLocalProcessing] = useState(false);
+  const [localProcessingStage, setLocalProcessingStage] = useState("");
+
+  const isProcessing = localProcessing || uiProcessing;
+  const processingStage = localProcessing ? localProcessingStage : uiProcessingStage;
+
+  const setIsProcessing = setLocalProcessing;
+  const setProcessingStage = setLocalProcessingStage;
+
+  // Mobile sheets & modals state
+  const [mobileAddSheetOpen, setMobileAddSheetOpen] = useState(false);
+  const [pasteLinkModalOpen, setPasteLinkModalOpen] = useState(false);
 
   // Load persisted artwork on initial mount & preload ML model
   useEffect(() => {
@@ -133,6 +149,34 @@ export const EditorLayout: React.FC = () => {
     [document.canvasWidth, document.canvasHeight, document.objects.length, addObject, select, pushHistory, computeStickerSize]
   );
 
+  // Check for pending sticker handoff from /remove-background
+  useEffect(() => {
+    try {
+      const pendingRaw = sessionStorage.getItem("stickercanvas_pending_sticker");
+      if (pendingRaw) {
+        sessionStorage.removeItem("stickercanvas_pending_sticker");
+        const pending = JSON.parse(pendingRaw);
+        if (pending && pending.dataUrl) {
+          const asset: Asset = {
+            id: generateAssetId(),
+            name: pending.name || "Removed BG Sticker",
+            src: pending.dataUrl,
+            thumbnailSrc: pending.dataUrl,
+            originalWidth: pending.width || 500,
+            originalHeight: pending.height || 500,
+            type: "upload",
+            isCutout: true,
+          };
+          addAsset(asset);
+          handleAddStickerDirectly(asset, 1, undefined, undefined, 6);
+          showToast("Cutout placed on canvas ✨");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to restore pending sticker:", err);
+    }
+  }, [addAsset, handleAddStickerDirectly, showToast]);
+
   // Queue for processing multiple images sequentially without crashing ML/WASM memory
   const processingQueueRef = useRef<Array<{ dataUrl: string; name: string; initialX?: number; initialY?: number }>>([]);
   const isProcessingQueueRef = useRef(false);
@@ -151,7 +195,7 @@ export const EditorLayout: React.FC = () => {
       const total = totalInBatchRef.current;
       const prefix = total > 1 ? `[${currentIdx}/${total}] ` : "";
 
-      setProcessingStage(`${prefix}Analyzing subject…`);
+      setProcessingStage(`${prefix}Making sticker — analyzing subject…`);
 
       try {
         const { stickerUrl, naturalWidth, naturalHeight } = await smartAutoCreateSticker(item.dataUrl, {
@@ -166,6 +210,8 @@ export const EditorLayout: React.FC = () => {
           originalWidth: naturalWidth,
           originalHeight: naturalHeight,
           type: "upload",
+          originalSrc: item.dataUrl,
+          isCutout: true,
         };
 
         addAsset(asset);
@@ -313,7 +359,7 @@ export const EditorLayout: React.FC = () => {
   }, [handleAutoCreateAndAddSticker, showToast]);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#F7F6F2] overflow-hidden select-none">
+    <div className="h-[100dvh] min-h-[100dvh] w-screen flex flex-col bg-[#F7F6F2] overflow-hidden select-none">
       <TopBar onPasteClipboard={handlePasteFromClipboard} />
       <div className="flex-1 flex overflow-hidden relative">
         <AssetsPanel
@@ -323,33 +369,45 @@ export const EditorLayout: React.FC = () => {
         <CanvasViewport
           onEngineReady={(engine) => (engineRef.current = engine)}
           onDropImage={handleAutoCreateAndAddSticker}
+          onOpenAdd={() => setMobileAddSheetOpen(true)}
         />
         <InspectorPanel />
       </div>
 
-      {/* Processing Overlay */}
+      {/* Non-blocking canvas-edge progress line during background removal */}
       {isProcessing && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-[2px] pointer-events-auto">
-          <div className="bg-white/95 backdrop-blur-sm border border-[#D9D8D2] rounded-2xl shadow-xl px-8 py-6 text-center max-w-xs mx-4">
-            {/* Spinning loader */}
-            <div className="relative w-12 h-12 mx-auto mb-4">
-              <div className="absolute inset-0 border-3 border-[#ECEBE6] rounded-full" />
-              <div className="absolute inset-0 border-3 border-transparent border-t-[#FF5A36] rounded-full animate-spin" />
-            </div>
-            <p className="text-sm font-semibold text-[#171717]">
-              Making your sticker…
-            </p>
-            <p className="text-xs text-[#6F6F6A] mt-1.5">
-              {processingStage || "Processing image…"}
-            </p>
+        <div className="fixed top-14 left-0 right-0 z-50 pointer-events-none">
+          <div className="h-1 bg-transparent w-full overflow-hidden">
+            <div className="h-full bg-[#FF5A36] animate-pulse w-full shadow-[0_0_8px_#FF5A36]" />
+          </div>
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md border border-[#D9D8D2] px-3.5 py-1.5 rounded-full text-xs font-medium text-[#171717] shadow-lg flex items-center gap-2 pointer-events-auto">
+            <div className="w-2 h-2 rounded-full bg-[#FF5A36] animate-ping" />
+            <span>{processingStage || "Processing image…"}</span>
           </div>
         </div>
       )}
 
       {/* Mobile touch navigation dock */}
       <MobileBottomBar
-        onAddFromDevice={handleAddFromDevice}
-        onPasteFromClipboard={handlePasteFromClipboard}
+        onOpenAddSheet={() => setMobileAddSheetOpen(true)}
+      />
+
+      {/* Mobile Add Sticker Action Sheet */}
+      <MobileAddSheet
+        isOpen={mobileAddSheetOpen}
+        onClose={() => setMobileAddSheetOpen(false)}
+        onSelectFile={handleAddFromDevice}
+        onPasteClipboard={handlePasteFromClipboard}
+        onOpenPasteLink={() => setPasteLinkModalOpen(true)}
+        onOpenEmoji={() => useUIStore.getState().toggleAssetsPanel()}
+      />
+
+      {/* Paste Image Link Modal */}
+      <PasteLinkModal
+        isOpen={pasteLinkModalOpen}
+        onClose={() => setPasteLinkModalOpen(false)}
+        onImageLoaded={handleAutoCreateAndAddSticker}
+        onOpenUploadFallback={() => setMobileAddSheetOpen(true)}
       />
 
       {/* Dedicated Background Drawer (Mobile bottom sheet / Desktop flyout) */}
@@ -371,6 +429,8 @@ export const EditorLayout: React.FC = () => {
       <ExportModal />
       <StickerMakerModal onStickerCreated={handleAddStickerDirectly} />
       <AssetPreviewModal onAddSticker={handleAddStickerDirectly} />
+      <FeedbackModal />
+      <AuthModal />
       <Toast />
     </div>
   );

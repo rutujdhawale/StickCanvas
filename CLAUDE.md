@@ -44,12 +44,15 @@ DOM (React 19)             State (Zustand)           Engine (PixiJS v8 WebGL)
 | Feature Area | Primary Files | Notes |
 |---|---|---|
 | **AI Background Removal (Turbo)** | `src/lib/bg-remove.ts` | Uses `briaai/RMBG-1.4` via `@huggingface/transformers` (WebGPU fp16/fp32 hardware acceleration, ~200ms). Instant transparent PNG bypass (<5ms), GPU canvas `destination-in` compositing (<2ms), and smart auto-trimming. Falls back to WASM (q8) and client-side flood fill. |
+| **Standalone Background Remover** | `src/components/remove-background/` | Dedicated `/remove-background` tool with drag/touch Before/After split slider, dropzone, camera, and one-click Studio sticker handoff. |
+| **Dodo Payments & Monetization** | `src/lib/payments/dodo-provider.ts`, `src/config/pricing.ts` | Serverless checkout session creation, dev simulation mode, multi-currency localization (`src/lib/currency.ts`), and idempotent entitlement restoration. |
 | **Canvas Engine Coordinator** | `src/engine/EditorEngine.ts` | Central facade. Binds PixiApp, SceneManager, TransformManager, SelectionManager, ViewportManager. Handles mouse & touch input normalization. |
 | **Drag / Resize / Rotate Math** | `src/engine/TransformManager.ts` | Coordinate conversion (`screenToWorld`), 1:1 delta dragging, vector projection corner resizing, and `atan2` angle rotation. |
 | **Selection & Handles** | `src/engine/SelectionManager.ts` | Draws bounding boxes, corner handles, and rotate stem. Includes 28px+ invisible touch hit areas for mobile fingertips. |
 | **Pan & Zoom** | `src/engine/ViewportManager.ts` | Cursor-centered wheel zoom, Space+drag pan, 2-finger touch pinch zoom & pan. |
 | **Batch Photo Processing** | `src/components/editor/EditorLayout.tsx` | Sequential FIFO queue for multi-photo imports, non-blocking floating status capsule (`⚡ Turbo AI`), live stage progress (`[1/3]`), staggered placement. |
-| **Mobile Navigation Dock** | `src/components/editor/MobileBottomBar.tsx` | Touch-optimized floating dock with Camera (`capture="environment"`), Gallery (`multiple`), Adjust, Background, Export. |
+| **Mobile Navigation Dock** | `src/components/editor/MobileBottomBar.tsx` | Touch-optimized floating dock with Cut BG / Restore, Camera (`capture="environment"`), Add sheet, Adjust, Background, Export. |
+| **Safe Image Link Proxy** | `src/app/api/proxy-image/route.ts` | SSRF-safe external image proxy for paste-by-link with loopback/LAN blocking and 20MB limit. |
 | **Die-Cut Border & Shadow** | `src/lib/sticker-border.ts` | Multi-angle radial canvas dilation generating vinyl white borders and physical drop shadows. |
 | **Print Sheets & 4K Export** | `src/lib/export-artwork.ts` | 300 DPI print layouts (A4, US Letter, 4x6, 6x6) with cut-guides, `window.print()`, and clipboard image copying. |
 | **State Persistence** | `src/lib/storage.ts` | Debounced IndexedDB (`stickercanvas_db`) storage with frame-0 synchronous cache. |

@@ -30,6 +30,8 @@ export interface Asset {
   originalWidth: number;
   originalHeight: number;
   type: "emoji" | "upload" | "paste";
+  originalSrc?: string; // Preserves un-cut source for background restore / undo
+  isCutout?: boolean; // Indicates if background has been removed
 }
 
 // ─── Background Types ───────────────────────────────────────────

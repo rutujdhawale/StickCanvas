@@ -37,18 +37,28 @@ export class SceneManager {
     return img;
   }
 
+  public invalidateAsset(assetId: string): void {
+    this.rawImageCache.delete(assetId);
+    for (const key of Array.from(this.textureCache.keys())) {
+      if (key.startsWith(assetId)) {
+        this.textureCache.delete(key);
+      }
+    }
+  }
+
   public async getTexture(asset: Asset): Promise<Texture> {
-    if (this.textureCache.has(asset.id)) {
-      return this.textureCache.get(asset.id)!;
+    const key = `${asset.id}_c${asset.isCutout ? 1 : 0}`;
+    if (this.textureCache.has(key)) {
+      return this.textureCache.get(key)!;
     }
 
     try {
       const texture = await Assets.load(asset.src);
-      this.textureCache.set(asset.id, texture);
+      this.textureCache.set(key, texture);
       return texture;
     } catch {
       const texture = Texture.from(asset.src);
-      this.textureCache.set(asset.id, texture);
+      this.textureCache.set(key, texture);
       return texture;
     }
   }
@@ -57,12 +67,13 @@ export class SceneManager {
     const bw = obj.borderWidth || 0;
     const bc = obj.borderColor || "#ffffff";
     const sh = obj.hasShadow ?? false;
+    const isCutout = asset.isCutout ? 1 : 0;
 
     if (bw <= 0 && !sh) {
       return this.getTexture(asset);
     }
 
-    const cacheKey = `${asset.id}_bw${bw}_bc${bc}_sh${sh ? 1 : 0}`;
+    const cacheKey = `${asset.id}_c${isCutout}_bw${bw}_bc${bc}_sh${sh ? 1 : 0}`;
     if (this.textureCache.has(cacheKey)) {
       return this.textureCache.get(cacheKey)!;
     }
@@ -104,7 +115,8 @@ export class SceneManager {
       const bw = obj.borderWidth || 0;
       const bc = obj.borderColor || "#ffffff";
       const sh = obj.hasShadow ?? false;
-      const textureKey = `${asset.id}_bw${bw}_bc${bc}_sh${sh ? 1 : 0}`;
+      const isCutout = asset.isCutout ? 1 : 0;
+      const textureKey = `${asset.id}_c${isCutout}_bw${bw}_bc${bc}_sh${sh ? 1 : 0}`;
 
       let sprite = this.spriteMap.get(obj.id);
 

@@ -1,10 +1,26 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Undo2, Redo2, Download, Layers, Sparkles, Paintbrush, FilePlus, Clipboard } from "lucide-react";
+import {
+  ArrowLeft,
+  Undo2,
+  Redo2,
+  Download,
+  Layers,
+  Sparkles,
+  Paintbrush,
+  FilePlus,
+  Clipboard,
+  MessageSquarePlus,
+  Scissors,
+  User as UserIcon,
+  LogOut,
+} from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useUIStore } from "@/store/uiStore";
+import { useAuthStore } from "@/store/authStore";
+import { StickerLogoMark } from "@/components/common/StickerLogoMark";
 
 interface TopBarProps {
   onPasteClipboard?: () => void;
@@ -17,11 +33,14 @@ export const TopBar: React.FC<TopBarProps> = ({ onPasteClipboard }) => {
     toggleAssetsPanel,
     toggleInspectorPanel,
     toggleBackgroundDrawer,
+    openFeedbackModal,
     assetsPanelOpen,
     inspectorPanelOpen,
     backgroundDrawerOpen,
     showToast,
   } = useUIStore();
+  const { user, isAuthenticated, openAuthModal, logout } = useAuthStore();
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   const nameInputRef = useRef<HTMLSpanElement>(null);
 
   const handleBlur = () => {
@@ -50,15 +69,21 @@ export const TopBar: React.FC<TopBarProps> = ({ onPasteClipboard }) => {
           <ArrowLeft size={18} strokeWidth={1.75} />
         </Link>
         <div className="flex items-center gap-2">
-          <div className="logo-mark">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+          <StickerLogoMark size={20} />
           <span className="font-semibold text-[14px] tracking-tight text-[#171717] hidden sm:inline">
             StickerCanvas
           </span>
         </div>
+
+        {/* Remove Background Tool Link */}
+        <Link
+          href="/remove-background"
+          className="hidden md:flex px-2.5 py-1 text-xs font-medium rounded-md border border-transparent text-[#6F6F6A] hover:text-[#171717] hover:bg-[#ECEBE6] transition-colors items-center gap-1.5"
+          title="Open AI Background Remover"
+        >
+          <Scissors size={13} />
+          <span>Remove BG</span>
+        </Link>
 
         {/* Assets panel toggle */}
         <button
@@ -165,6 +190,57 @@ export const TopBar: React.FC<TopBarProps> = ({ onPasteClipboard }) => {
         >
           <Layers size={16} strokeWidth={1.75} />
         </button>
+
+        <button
+          onClick={openFeedbackModal}
+          className="p-1.5 rounded-md text-[#6F6F6A] hover:text-[#171717] hover:bg-[#ECEBE6] transition-colors"
+          title="Give feedback or report a bug"
+        >
+          <MessageSquarePlus size={16} strokeWidth={1.75} />
+        </button>
+
+        {isAuthenticated && user ? (
+          <div className="relative">
+            <button
+              onClick={() => setShowAccountMenu((v) => !v)}
+              className="flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-md text-xs font-medium text-[#171717] hover:bg-[#ECEBE6] transition-colors"
+              title={`Signed in as ${user.email}`}
+            >
+              <div className="w-5 h-5 rounded-full bg-[#FF5A36] text-white flex items-center justify-center text-[10px] font-bold">
+                {user.name?.charAt(0).toUpperCase() || "U"}
+              </div>
+              <span className="hidden xl:inline truncate max-w-[85px]">{user.name}</span>
+            </button>
+            {showAccountMenu && (
+              <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-[#D9D8D2] rounded-xl shadow-lg p-1 z-50 animate-in fade-in zoom-in-95 text-xs">
+                <div className="px-2.5 py-1.5 border-b border-[#ECEBE6]">
+                  <div className="font-semibold text-[#171717] truncate">{user.name}</div>
+                  <div className="text-[11px] text-[#6F6F6A] truncate">{user.email}</div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAccountMenu(false);
+                    logout();
+                    showToast("Signed out");
+                  }}
+                  className="w-full mt-1 flex items-center gap-2 px-2.5 py-1.5 text-xs text-[#CF1322] hover:bg-[#FFF1F0] rounded-lg transition-colors text-left"
+                >
+                  <LogOut size={13} />
+                  <span>Sign out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => openAuthModal("login")}
+            className="px-2.5 py-1 text-xs font-semibold rounded-md border border-[#D9D8D2] hover:border-[#171717] bg-white text-[#171717] transition-all flex items-center gap-1.5 shadow-2xs"
+            title="Sign in to save sheets and sync credits"
+          >
+            <UserIcon size={13} />
+            <span className="hidden sm:inline">Sign in</span>
+          </button>
+        )}
 
         <button
           onClick={openExportModal}

@@ -1,8 +1,26 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import {
+  ArrowRight,
+  Sparkles,
+  Scissors,
+  Printer,
+  Layers,
+  ShieldCheck,
+  Smartphone,
+  MessageSquarePlus,
+  User as UserIcon,
+  Check,
+  Zap,
+} from "lucide-react";
+import { loadArtwork } from "@/lib/storage";
+import { StickerLogoMark } from "@/components/common/StickerLogoMark";
+import { AuthModal } from "@/components/auth/AuthModal";
+import { FeedbackModal } from "@/components/common/FeedbackModal";
+import { useAuthStore } from "@/store/authStore";
+import { useUIStore } from "@/store/uiStore";
 
 const GithubIcon = ({ size = 16 }: { size?: number }) => (
   <svg
@@ -45,6 +63,24 @@ const INITIAL_STICKERS: HeroSticker[] = [
 export const Hero: React.FC = () => {
   const [stickers, setStickers] = useState<HeroSticker[]>(INITIAL_STICKERS);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [hasSavedArtwork, setHasSavedArtwork] = useState(false);
+  const [preferStudioDirect, setPreferStudioDirect] = useState(false);
+
+  const { user, isAuthenticated, openAuthModal } = useAuthStore();
+  const { openFeedbackModal } = useUIStore();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setPreferStudioDirect(localStorage.getItem("stickercanvas_open_studio_direct") === "true");
+      loadArtwork()
+        .then((data) => {
+          if (data?.document?.objects && data.document.objects.length > 0) {
+            setHasSavedArtwork(true);
+          }
+        })
+        .catch(() => { });
+    }
+  }, []);
 
   // High-performance drag tracking ref
   const dragRef = useRef<{
@@ -67,7 +103,7 @@ export const Hero: React.FC = () => {
 
     try {
       el.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch { }
 
     const sticker = stickers.find((s) => s.id === id);
     if (!sticker) return;
@@ -131,7 +167,7 @@ export const Hero: React.FC = () => {
 
     try {
       drag.element.releasePointerCapture(e.pointerId);
-    } catch {}
+    } catch { }
 
     const finalX = drag.currentX;
     const finalY = drag.currentY;
@@ -153,19 +189,54 @@ export const Hero: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F7F6F2] text-[#171717] flex flex-col justify-between selection:bg-[#FF5A36] selection:text-white">
       {/* Header */}
-      <header className="h-16 border-b border-[#D9D8D2] flex items-center justify-between px-6 sm:px-12 max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-2.5">
-          <div className="logo-mark">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <span className="font-semibold text-base tracking-tight text-[#171717]">
-            StickerCanvas
-          </span>
+      <header className="h-16 border-b border-[#D9D8D2] flex items-center justify-between px-6 sm:px-12 max-w-7xl mx-auto w-full sticky top-0 bg-[#F7F6F2]/90 backdrop-blur-md z-40">
+        <div className="flex items-center gap-6">
+          <Link href="/" className="flex items-center gap-2.5 font-bold tracking-tight text-[#171717] hover:opacity-85 transition-opacity">
+            <StickerLogoMark size={24} />
+            <span className="font-semibold text-base tracking-tight text-[#171717]">
+              StickerCanvas
+            </span>
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-5 text-xs font-medium text-[#6F6F6A]">
+            <Link
+              href="/remove-background"
+              className="hover:text-[#171717] transition-colors flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-[#ECEBE6]"
+            >
+              <Scissors size={13} className="text-[#FF5A36]" />
+              <span>Remove Background</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={openFeedbackModal}
+              className="hover:text-[#171717] transition-colors flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-[#ECEBE6]"
+            >
+              <MessageSquarePlus size={13} />
+              <span>Feedback</span>
+            </button>
+          </nav>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {isAuthenticated && user ? (
+            <div className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-lg text-xs font-medium text-[#171717] bg-white border border-[#D9D8D2]">
+              <div className="w-5 h-5 rounded-full bg-[#FF5A36] text-white flex items-center justify-center text-[10px] font-bold">
+                {user.name?.charAt(0).toUpperCase() || "U"}
+              </div>
+              <span className="hidden sm:inline truncate max-w-[100px]">{user.name}</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openAuthModal("login")}
+              className="text-xs font-medium text-[#171717] px-3 py-1.5 rounded-lg border border-[#D9D8D2] hover:border-[#171717] bg-white transition-all flex items-center gap-1.5 shadow-2xs"
+            >
+              <UserIcon size={13} />
+              <span>Sign in</span>
+            </button>
+          )}
+
           <Link
             href="/editor"
             className="px-4 py-2 text-xs font-semibold bg-[#171717] hover:bg-[#333333] text-white rounded-lg transition-all shadow-sm active:scale-95"
@@ -180,6 +251,7 @@ export const Hero: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left: Editorial Copy */}
           <div className="lg:col-span-6 space-y-6">
+
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[#171717] leading-[1.08]">
               Put stuff together.<br />
               <span className="underline decoration-[#FF5A36] decoration-4 underline-offset-4">
@@ -190,14 +262,40 @@ export const Hero: React.FC = () => {
               </span>
             </h1>
 
-            <div className="pt-2">
-              <Link
-                href="/editor"
-                className="inline-flex px-7 py-3.5 bg-[#FF5A36] hover:bg-[#e84e2c] text-white text-sm font-semibold rounded-xl items-center gap-2.5 shadow-sm transition-all active:scale-95 group"
-              >
-                <span>Start making</span>
-                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
+            {/* <p className="text-sm sm:text-base text-[#6F6F6A] max-w-md leading-relaxed">
+              Cut out stickers with on-device AI, arrange them with smooth physics, add vinyl die-cut borders, and export 300 DPI production sheets.
+            </p> */}
+
+            <div className="pt-2 flex flex-wrap items-center gap-3">
+              {hasSavedArtwork ? (
+                <>
+                  <Link
+                    href="/editor"
+                    className="inline-flex px-7 py-3.5 bg-[#FF5A36] hover:bg-[#e84e2c] text-white text-sm font-bold rounded-xl items-center gap-2.5 shadow-xs transition-all active:scale-95 group"
+                  >
+                    <span>Continue editing</span>
+                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/editor"
+                    className="inline-flex px-7 py-3.5 bg-[#FF5A36] hover:bg-[#e84e2c] text-white text-sm font-bold rounded-xl items-center gap-2.5 shadow-xs transition-all active:scale-95 group"
+                  >
+                    <span>Start creating</span>
+                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                  <Link
+                    href="/remove-background"
+                    className="inline-flex px-5 py-3.5 bg-white hover:bg-[#ECEBE6] text-[#171717] border border-[#D9D8D2] text-sm font-semibold rounded-xl items-center gap-2 transition-all active:scale-95"
+                  >
+                    <Scissors size={15} className="text-[#FF5A36]" />
+                    <span>Remove BG Tool</span>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 
@@ -223,11 +321,10 @@ export const Hero: React.FC = () => {
                       touchAction: "none",
                       willChange: "transform",
                     }}
-                    className={`absolute select-none flex items-center justify-center cursor-grab ${
-                      isDragging
+                    className={`absolute select-none flex items-center justify-center cursor-grab ${isDragging
                         ? "transition-none"
                         : "transition-transform duration-150 ease-out hover:scale-110 active:scale-115"
-                    }`}
+                      }`}
                   >
                     {s.imageUrl ? (
                       <img
@@ -249,19 +346,39 @@ export const Hero: React.FC = () => {
         </div>
       </main>
 
+
+
       {/* Footer */}
-      <footer className="border-t border-[#D9D8D2] py-6 px-6 sm:px-12 max-w-7xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6F6F6A]">
-        <div className="flex items-center gap-2">
-          <div className="logo-mark">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+      <footer className="border-t border-[#D9D8D2] py-8 px-6 sm:px-12 max-w-7xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-6 text-xs text-[#6F6F6A]">
+        <div className="flex items-center gap-3">
+          <StickerLogoMark size={22} />
           <span className="font-semibold text-[#171717]">StickerCanvas</span>
           <span>· Designed for human creativity</span>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-5">
+          <button
+            type="button"
+            onClick={openFeedbackModal}
+            className="hover:text-[#171717] transition-colors flex items-center gap-1.5"
+          >
+            <MessageSquarePlus size={13} />
+            <span>Feedback & Bug Reports</span>
+          </button>
+          <Link href="/remove-background" className="hover:text-[#171717] transition-colors">
+            Remove Background
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              const nextVal = !preferStudioDirect;
+              setPreferStudioDirect(nextVal);
+              localStorage.setItem("stickercanvas_open_studio_direct", nextVal ? "true" : "false");
+            }}
+            className="text-xs text-[#6F6F6A] hover:text-[#171717] transition-colors"
+          >
+            {preferStudioDirect ? "✓ Studio-first enabled" : "Open directly in Studio"}
+          </button>
           <a
             href="https://github.com/rutujdhawale"
             target="_blank"
@@ -271,11 +388,15 @@ export const Hero: React.FC = () => {
             <GithubIcon size={14} />
             <span>GitHub</span>
           </a>
-          <Link href="/editor" className="text-[#FF5A36] font-medium hover:underline">
+          <Link href="/editor" className="text-[#FF5A36] font-semibold hover:underline">
             Open Editor →
           </Link>
         </div>
       </footer>
+
+      {/* Modals */}
+      <FeedbackModal />
+      <AuthModal />
     </div>
   );
 };

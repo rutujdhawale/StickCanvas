@@ -114,6 +114,7 @@ interface EditorState {
 
   // ─── Assets ─────────────────────────────────────────────────
   addAsset: (asset: Asset) => void;
+  updateAsset: (id: string, patch: Partial<Asset>) => void;
   removeAsset: (id: string) => void;
 
   // ─── History ────────────────────────────────────────────────
@@ -359,6 +360,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // ─── Assets ─────────────────────────────────────────────────
 
   addAsset: (asset) => set((s) => ({ assets: [...s.assets, asset] })),
+
+  updateAsset: (id, patch) =>
+    set((s) => ({
+      assets: s.assets.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    })),
 
   removeAsset: (id) =>
     set((s) => ({ assets: s.assets.filter((a) => a.id !== id) })),

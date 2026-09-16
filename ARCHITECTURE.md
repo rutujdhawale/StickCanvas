@@ -107,8 +107,13 @@ The engine code is completely decoupled from React component rendering.
 | [`src/components/editor/StickerMakerModal.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/StickerMakerModal.tsx) | `StickerMakerModal` | "Add & Customize Sticker" modal with live preview, background removal, transparency tuning, and die-cut border. |
 | [`src/components/editor/AssetPreviewModal.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/AssetPreviewModal.tsx) | `AssetPreviewModal` | High-resolution sticker asset inspector dialog displaying resolution, transparency checkerboard, and "Place on Canvas". |
 | [`src/components/editor/BackgroundPanel.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/BackgroundPanel.tsx) | `BackgroundPanel` | Comprehensive Canvas Background customizer: solid studio swatches, custom hex color picker, 8 curated gradients + angle builder, image background upload/direct paste with opacity & blur sliders, paper texture/grid overlays, and transparent mode. |
-| [`src/components/editor/MobileBottomBar.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/MobileBottomBar.tsx) | `MobileBottomBar` | Touch-optimized floating bottom navigation dock for mobile devices (`< md`) with large hit targets (min 44px) for Device Upload, Stickers Drawer, Canvas Background, Adjust/Opacity, Layers, and Export. |
-| [`src/components/editor/Toast.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/Toast.tsx) | `Toast` | Minimal quiet notification popup (e.g. *"Exported ✓"*, *"Made your sticker!"*). |
+| [`src/components/editor/MobileBottomBar.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/MobileBottomBar.tsx) | `MobileBottomBar` | Touch-optimized floating bottom navigation dock for mobile devices (`< md`) with large hit targets (min 44px), Cut BG toggle, Camera, Link, and Layers. |
+| [`src/components/editor/MobileAddSheet.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/MobileAddSheet.tsx) | `MobileAddSheet` | Mobile bottom sheet with large tactile action cards for Device Upload, Photo Camera, Clipboard Paste, URL Link, and Emoji Library. |
+| [`src/components/editor/PasteLinkModal.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/PasteLinkModal.tsx) | `PasteLinkModal` | Safe web image URL input dialog with auto-clipboard detection, SSRF proxy integration, and upload fallback. |
+| [`src/components/editor/PrintPaywallModal.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/PrintPaywallModal.tsx) | `PrintPaywallModal` | Dodo Payments paywall dialog with multi-currency selector, credit packages, Pro subscription, and instant guest token unlock. |
+| [`src/components/remove-background/BackgroundRemovalApp.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/remove-background/BackgroundRemovalApp.tsx) | `BackgroundRemovalApp` | Standalone on-device background remover app with dropzone, camera, URL modal, fine-tune drawer, and one-click Studio sticker handoff. |
+| [`src/components/remove-background/BeforeAfterSlider.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/remove-background/BeforeAfterSlider.tsx) | `BeforeAfterSlider` | Touch and mouse draggable Before / Compare / After visual comparison canvas. |
+| [`src/components/editor/Toast.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/editor/Toast.tsx) | `Toast` | Minimal quiet notification popup (e.g. *"Exported ✓"*, *"Background removed ✨"*). |
 | [`src/components/landing/Hero.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/components/landing/Hero.tsx) | `Hero` | Landing page hero: editorial typography, *"Start making"* CTA, and an interactive draggable mini sticker playground. |
 
 ---
@@ -118,8 +123,13 @@ The engine code is completely decoupled from React component rendering.
 | File | Role |
 |---|---|
 | [`src/app/layout.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/layout.tsx) | Root layout loading Google Fonts (Inter) and global metadata. |
-| [`src/app/page.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/page.tsx) | Home page (`/`) rendering `Hero`. |
-| [`src/app/editor/page.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/editor/page.tsx) | Editor page (`/editor`) dynamically loading `EditorLayout` with `{ ssr: false }` (required because PixiJS uses browser WebGL). |
+| [`src/app/page.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/page.tsx) | Adaptive home page (`/`) switching between instant mobile editor (<768px) and desktop tactile `Hero`. |
+| [`src/app/editor/page.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/editor/page.tsx) | Editor page (`/editor`) dynamically loading `EditorLayout` with `{ ssr: false }`. |
+| [`src/app/remove-background/page.tsx`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/remove-background/page.tsx) | Standalone background remover page (`/remove-background`) with dedicated SEO metadata. |
+| [`src/app/api/dodo/checkout/route.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/dodo/checkout/route.ts) | Serverless checkout endpoint initiating Dodo Payments session or local dev simulation. |
+| [`src/app/api/dodo/restore/route.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/dodo/restore/route.ts) | Idempotent purchase verification and entitlement restoration endpoint. |
+| [`src/app/api/dodo/webhook/route.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/dodo/webhook/route.ts) | Webhook handler listening for Dodo payment and subscription events. |
+| [`src/app/api/proxy-image/route.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/proxy-image/route.ts) | SSRF-protected proxy downloading external image URLs for paste-by-link. |
 | [`src/app/globals.css`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/globals.css) | Tailored color system variables (`--bg`, `--ink`, `--secondary`, `--border`, `--canvas`, `--tomato`, `--blue`), paper background patterns, logo mark styles, and checkerboard utilities. |
 
 ---

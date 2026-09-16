@@ -172,6 +172,10 @@ export class EditorEngine {
     await this.pixiApp.drawBackground(config);
   }
 
+  public invalidateAsset(assetId: string): void {
+    this.sceneManager.invalidateAsset(assetId);
+  }
+
   public screenToCanvas(clientX: number, clientY: number): { x: number; y: number } {
     return this.transformManager.screenToWorld(clientX, clientY);
   }

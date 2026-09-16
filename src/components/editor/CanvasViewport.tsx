@@ -11,9 +11,14 @@ import { getDefaultAssets } from "@/lib/emoji-stickers";
 interface CanvasViewportProps {
   onEngineReady?: (engine: EditorEngine) => void;
   onDropImage?: (dataUrl: string, name: string, worldX?: number, worldY?: number) => void;
+  onOpenAdd?: () => void;
 }
 
-export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, onDropImage }) => {
+export const CanvasViewport: React.FC<CanvasViewportProps> = ({
+  onEngineReady,
+  onDropImage,
+  onOpenAdd,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<EditorEngine | null>(null);
 
@@ -284,14 +289,20 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, o
               Background is removed automatically.
             </p>
 
-            {/* Primary: Keyboard shortcut hint (desktop) / Choose Photo (mobile) */}
+            {/* Primary: Keyboard shortcut hint (desktop) / Add sticker (mobile) */}
             {isMobile ? (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="pointer-events-auto mt-4 w-full px-5 py-3 bg-[#FF5A36] hover:bg-[#e84e2c] text-white text-sm font-semibold rounded-xl shadow-sm transition-all active:scale-95"
-              >
-                Choose Photo
-              </button>
+              <div className="mt-4 space-y-2.5 pointer-events-auto w-full">
+                <button
+                  onClick={onOpenAdd || (() => fileInputRef.current?.click())}
+                  className="w-full px-5 py-3 bg-[#FF5A36] hover:bg-[#e84e2c] text-white text-sm font-bold rounded-xl shadow-xs transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <span className="text-base">+</span>
+                  <span>Add sticker</span>
+                </button>
+                <p className="text-[11px] text-[#6F6F6A] tracking-tight">
+                  Paste an image anywhere to start
+                </p>
+              </div>
             ) : (
               <div className="mt-4 pointer-events-none">
                 <div className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FAF9F5] border border-[#D9D8D2] rounded-xl text-sm font-medium text-[#171717]">
@@ -308,42 +319,16 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({ onEngineReady, o
               </div>
             )}
 
-            {/* Secondary actions */}
-            <div className="mt-3 flex items-center justify-center gap-3 pointer-events-auto">
-              {!isMobile && (
+            {!isMobile && (
+              <div className="mt-3 flex items-center justify-center gap-3 pointer-events-auto">
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="px-4 py-2 text-xs font-semibold text-[#171717] bg-white hover:bg-[#ECEBE6] border border-[#D9D8D2] rounded-lg transition-all active:scale-95"
                 >
                   Upload Image
                 </button>
-              )}
-              {isMobile && (
-                <button
-                  onClick={() => {
-                    const camInput = window.document.createElement("input");
-                    camInput.type = "file";
-                    camInput.accept = "image/*";
-                    camInput.capture = "environment";
-                    camInput.onchange = (ev) => {
-                      const file = (ev.target as HTMLInputElement).files?.[0];
-                      if (file && onDropImage) {
-                        const reader = new FileReader();
-                        reader.onload = (rev) => {
-                          const dataUrl = rev.target?.result as string;
-                          if (dataUrl) onDropImage(dataUrl, "Camera Photo");
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    };
-                    camInput.click();
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-[#171717] bg-white hover:bg-[#ECEBE6] border border-[#D9D8D2] rounded-lg transition-all active:scale-95"
-                >
-                  📷 Take Photo
-                </button>
-              )}
-            </div>
+              </div>
+            )}
 
             {!isMobile && (
               <p className="text-[11px] text-[#6F6F6A] mt-3">

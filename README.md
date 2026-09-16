@@ -10,11 +10,11 @@ An ultra-tactile creative playground and production-grade sticker sheet studio. 
 [![React 19](https://img.shields.io/badge/React-19.0.0-61dafb?style=flat-square&logo=react)](https://react.dev)
 [![PixiJS v8](https://img.shields.io/badge/PixiJS-v8-e72264?style=flat-square&logo=pixijs)](https://pixijs.com)
 [![WebGPU / WASM](https://img.shields.io/badge/AI-WebGPU%20%2F%20WASM-orange?style=flat-square)](https://huggingface.co/docs/transformers.js)
-[![Stripe](https://img.shields.io/badge/Payments-Stripe%20Checkout-6772e5?style=flat-square&logo=stripe)](https://stripe.com)
+[![Dodo Payments](https://img.shields.io/badge/Payments-Dodo%20Payments-orange?style=flat-square)](https://dodopayments.com)
 [![Print Ready](https://img.shields.io/badge/Output-300%20DPI%20Physical-emerald?style=flat-square)](#-studio-300-dpi-print-sheet-exporter)
 [![Zero Login](https://img.shields.io/badge/Privacy-Zero%20Login%20%2F%20Client--Side-purple?style=flat-square)](#-100-client-side-privacy--zero-friction)
 
-[**Launch StickerCanvas**](https://stickercanvas.runs-on.dev) • [**Architecture Guide**](ARCHITECTURE.md) • [**Stripe Roadmap**](PRINT_PAYWALL_STRIPE_ROADMAP.md)
+[**Launch StickerCanvas**](https://stick-canvas.vercel.app) • [**Background Remover**](https://stick-canvas.vercel.app/remove-background) • [**Architecture Guide**](ARCHITECTURE.md) • [**Dodo Setup Guide**](DODO_PAYMENTS_SETUP.md)
 
 </div>
 
@@ -25,8 +25,8 @@ An ultra-tactile creative playground and production-grade sticker sheet studio. 
 Creating physical sticker sheets traditionally requires a tedious multi-app pipeline: lassoing backgrounds in Photoshop, exporting PNGs, importing into Illustrator or Canva, tracing vector cut lines, manually arranging margins, and calculating DPI scaling for printers.
 
 **StickerCanvas solves this in a single, zero-friction browser session:**
-1. **Drop or paste any image** (`Ctrl+V`) — photo, screenshot, or artwork.
-2. **Neural AI extracts the main subject** in ~1.2s directly on your local GPU/CPU.
+1. **Drop or paste any image** (`Ctrl+V`), image URL, or camera snapshot.
+2. **Neural AI extracts the main subject** in ~200ms directly on your local GPU/CPU.
 3. **Vinyl die-cut borders & physical depth shadows** are generated in real-time.
 4. **Arrange on a tactile 60–120 FPS canvas** with multi-touch gestures and snap controls.
 5. **Print clean 300 DPI sticker sheets** with scissor cut-guides or Cricut/Silhouette cutting paths.
@@ -43,9 +43,20 @@ Creating physical sticker sheets traditionally requires a tedious multi-app pipe
 ### 🧠 On-Device Neural AI Background Removal (RMBG-1.4)
 - **Zero Cloud Latency & Total Privacy**: Powered by `@huggingface/transformers` running `briaai/RMBG-1.4` entirely within the browser. No images are uploaded to any server.
 - **WebGPU Acceleration with WASM Fallback**: Leverages WebGPU hardware acceleration with an automatic quantized WASM (`q8`) SIMD fallback for universal device support.
-- **Dynamic 640px Inference**: High-resolution inputs are downsampled to an optimal 640px tensor space for 5× faster inference (~1.2s), then projected back onto original high-res pixels via GPU bilinear interpolation.
+- **Dynamic 640px Inference**: High-resolution inputs are downsampled to an optimal 640px tensor space for fast inference (~200ms with WebGPU), then projected back onto original high-res pixels via GPU bilinear interpolation.
 - **Main-Body Saliency Filter**: Connected-component labeling detects and isolates the primary subject, automatically rejecting distant background objects, wall patterns, floor shadows, and edge noise.
 - **Instant Transparent PNG Bypass**: Pre-cut transparent PNGs bypass neural inference in `<5ms`.
+
+### 🪄 Standalone Free Background Remover (`/remove-background`)
+- **Direct Standalone Tool**: Dedicated clean page for instant background removal without loading the full canvas.
+- **Interactive Before / After Comparison Slider**: Drag or toggle between Original, Split View, and Transparent Cutout.
+- **One-Click "Make a Sticker"**: Seamless handoff directly into the StickerCanvas Studio with the cutout pre-loaded and selected.
+- **No Sign-up / 100% Private**: Full-resolution PNG downloads with zero watermarks.
+
+### 📱 Adaptive UX & Mobile-First Workflow
+- **One Adaptive Codebase**: Seamlessly switches between tactile desktop hero and instant mobile-first canvas on phones (<768px).
+- **Mobile Action Sheet**: Direct camera capture, device upload, clipboard pasting, and web image URL importing.
+- **Safe Image Link Proxy (`/api/proxy-image`)**: Paste any public image URL with SSRF protection, size validation, and CORS bypassing.
 
 ### 🏷️ Authentic Die-Cut Vinyl Borders & 3D Lighting
 - **Real-Time Dilate Contouring**: Generates uniform physical sticker borders (`2px` to `18px`) with rounded joins and smooth contours.
@@ -61,15 +72,17 @@ Creating physical sticker sheets traditionally requires a tedious multi-app pipe
 - **Scissor & Cutter Guidelines**: Optional dashed outlines around stickers provide clean cutting guides for scissors, craft blades, or Cricut/Silhouette optical sensors.
 - **Direct Browser Print**: Native integration with `window.print()` and `@page` CSS rules for direct printing to inkjet and laser printers.
 
-### 💳 Stripe Monetization Engine & Paywall
+### 💳 Dodo Payments Integration & Multi-Currency Paywall
 - **Free Digital Exports**: Digital web exports (1×, 2× PNG, JPEG, WebP) remain **100% free with zero login**.
 - **Interactive Watermarked Preview**: Unpaid users can preview physical 300 DPI layouts protected by an elegant, diagonal repeating watermark.
 - **Guest-Friendly Paywall Modal**:
   - **Single Sheet ($1.99 one-time)**: Instant unlock for the current sheet.
   - **5-Sheet Pack ($4.99 one-time — 50% OFF)**: Flexible credits stored for future projects.
   - **Pro Creator ($7.99/month)**: Unlimited 300 DPI exports, cutting guides, and commercial rights.
+- **Multi-Currency Display**: Automatically detects locale and shows localized prices in **USD ($), EUR (€), GBP (£), INR (₹), CAD (CA$), AUD (A$), and JPY (¥)**.
 - **Zero-Login Guest Entitlements**: Purchased tokens persist in browser `localStorage`, allowing users to buy and print immediately without account creation friction.
-- **Local Dev-Mode Simulator**: Automatically simulates the Stripe checkout lifecycle when secret keys are omitted, enabling seamless local testing.
+- **Built-in Dev-Mode Simulator**: Automatically simulates the checkout lifecycle when secret keys are omitted, enabling instant local testing.
+- **Setup Guide**: See [**DODO_PAYMENTS_SETUP.md**](DODO_PAYMENTS_SETUP.md) for full dashboard instructions.
 
 ### 🎨 Canvas Background Studio
 - Curated warm paper swatches (Warm Ivory, Kraft Paper, Moleskine, Matte Charcoal).
@@ -116,14 +129,14 @@ StickerCanvas Pipeline
                                                                 ▼
 ┌──────────────────┐     ┌─────────────────────┐     ┌──────────────────────┐
 │ Physical Print   │ <── │ Export Engine       │ <── │ PixiJS v8 Scene      │
-│ 300 DPI / Stripe │     │ PNG / WebP / Print  │     │ 60–120 FPS WebGL     │
+│ 300 DPI / Dodo   │     │ PNG / WebP / Print  │     │ 60–120 FPS WebGL     │
 └──────────────────┘     └─────────────────────┘     └──────────────────────┘
 ```
 
 - **Frontend Framework**: [Next.js 16 (App Router)](https://nextjs.org) with Turbopack & React 19
 - **2D Graphics Engine**: [PixiJS v8](https://pixijs.com) (Hardware-accelerated WebGL scene graph)
 - **Machine Learning**: [`@huggingface/transformers`](https://huggingface.co/docs/transformers.js) running `briaai/RMBG-1.4` ONNX
-- **Payment Processing**: [Stripe](https://stripe.com) (`stripe` & `@stripe/stripe-js`)
+- **Payment Processing**: [Dodo Payments](https://dodopayments.com) (REST API, webhooks, multi-currency)
 - **State Management**: [Zustand v5](https://zustand.docs.pmnd.rs)
 - **Storage**: Browser IndexedDB with synchronous in-memory hydration
 - **Styling**: Vanilla CSS & Tailwind CSS with warm tactile design tokens (`#FAF9F5`, `#171717`, `#FF5A36`)
@@ -154,31 +167,29 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) to start using StickerCanvas.
+Visit [http://localhost:3000](http://localhost:3000) to start using StickerCanvas or [http://localhost:3000/remove-background](http://localhost:3000/remove-background) for the standalone background remover.
 
-> **Note on Stripe Testing**: If `STRIPE_SECRET_KEY` is not provided in `.env.local`, StickerCanvas automatically activates **Dev-Mode Simulation**. You can test the complete paywall flow, pricing tiers, entitlement unlocking, and clean 300 DPI exports locally without active Stripe credentials.
+> **Note on Dodo Payments Testing**: If `DODO_PAYMENTS_API_KEY` is not provided in `.env.local`, StickerCanvas automatically activates **Dev-Mode Simulation**. You can test the complete paywall flow, pricing tiers, entitlement unlocking, and clean 300 DPI exports locally without active Dodo credentials.
 
 ---
 
 ## ⚙️ Environment Variables
 
-See [`.env.example`](.env.example) for all configuration options:
+See [`.env.example`](.env.example) and [**DODO_PAYMENTS_SETUP.md**](DODO_PAYMENTS_SETUP.md) for all configuration options:
 
 ```bash
 # Application URL
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-# Stripe Public Configuration
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+# Dodo Payments Configuration
+DODO_PAYMENTS_ENVIRONMENT=test_mode
+DODO_PAYMENTS_API_KEY=dodo_api_test_...
+DODO_PAYMENTS_WEBHOOK_KEY=whsec_...
 
-# Stripe Price IDs
-NEXT_PUBLIC_STRIPE_PRICE_SINGLE=price_...
-NEXT_PUBLIC_STRIPE_PRICE_PACK=price_...
-NEXT_PUBLIC_STRIPE_PRICE_PRO=price_...
-
-# Stripe Secret Configuration (Server-Only)
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
+# Dodo Product IDs
+NEXT_PUBLIC_DODO_PRODUCT_SINGLE_SHEET=p_single_sheet_199
+NEXT_PUBLIC_DODO_PRODUCT_SHEET_PACK=p_sheet_pack_499
+NEXT_PUBLIC_DODO_PRODUCT_PRO_MONTHLY=p_pro_monthly_799
 ```
 
 ---

@@ -31,6 +31,7 @@ export const StickerMakerModal: React.FC<StickerMakerModalProps> = ({ onStickerC
 
   const [processedUrl, setProcessedUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState("");
 
   const imageRef = useRef<HTMLImageElement | null>(null);
 
@@ -47,6 +48,7 @@ export const StickerMakerModal: React.FC<StickerMakerModalProps> = ({ onStickerC
 
     let isMounted = true;
     setIsProcessing(true);
+    setProcessingStage("Analyzing…");
 
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -60,15 +62,22 @@ export const StickerMakerModal: React.FC<StickerMakerModalProps> = ({ onStickerC
           opacity: opacity / 100,
           addStickerBorder: mode === "cutout" && addBorder,
           borderWidth: borderWidth,
+          onProgress: (stage) => {
+            if (isMounted) setProcessingStage(stage);
+          },
         });
 
         if (isMounted) {
           setProcessedUrl(resultDataUrl);
           setIsProcessing(false);
+          setProcessingStage("");
         }
       } catch (err) {
         console.error(err);
-        if (isMounted) setIsProcessing(false);
+        if (isMounted) {
+          setIsProcessing(false);
+          setProcessingStage("");
+        }
       }
     };
     img.src = stickerMakerImage;
@@ -194,9 +203,9 @@ export const StickerMakerModal: React.FC<StickerMakerModalProps> = ({ onStickerC
 
             {/* Processing Indicator */}
             {isProcessing && (
-              <div className="absolute top-2.5 right-2.5 z-10 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full text-[10px] font-medium border border-[#D9D8D2] text-[#171717] flex items-center gap-1.5">
+              <div className="absolute top-2.5 right-2.5 z-10 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-full text-[10px] font-medium border border-[#D9D8D2] text-[#171717] flex items-center gap-1.5 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-[#FF5A36] animate-ping" />
-                <span>Processing…</span>
+                <span>{processingStage || "Processing…"}</span>
               </div>
             )}
 
