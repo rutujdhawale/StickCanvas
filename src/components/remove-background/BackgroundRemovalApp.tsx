@@ -339,9 +339,11 @@ export const BackgroundRemovalApp: React.FC = () => {
             title="Send feedback or report an issue"
           >
             <MessageSquarePlus size={14} />
-            <span className="hidden sm:inline">Feedback</span>
+            {/* <span className="hidden sm:inline">Feedback</span> */}
           </button>
 
+          {/* Sign in and user profile temporarily hidden per user request */}
+          {/*
           {isAuthenticated && user ? (
             <div className="flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-lg text-xs font-medium text-[#171717] bg-white border border-[#D9D8D2]">
               <div className="w-5 h-5 rounded-full bg-[#FF5A36] text-white flex items-center justify-center text-[10px] font-bold">
@@ -359,6 +361,7 @@ export const BackgroundRemovalApp: React.FC = () => {
               <span className="hidden sm:inline">Sign in</span>
             </button>
           )}
+          */}
 
           <Link
             href="/editor"
@@ -797,22 +800,22 @@ export const BackgroundRemovalApp: React.FC = () => {
         <div className="flex items-center gap-2">
           <StickerLogoMark size={18} />
           <span className="font-semibold text-[#171717]">StickerCanvas</span>
-          <span>· Free On-Device Background Removal</span>
+          <span>· On-Device Background Removal</span>
         </div>
 
         <div className="flex items-center gap-5">
-          <button
+          {/* <button
             type="button"
             onClick={openFeedbackModal}
             className="hover:text-[#171717] transition-colors"
           >
             Feedback & Bugs
-          </button>
+          </button> */}
           <Link href="/" className="hover:text-[#171717] transition-colors">
             Home
           </Link>
           <Link href="/editor" className="text-[#FF5A36] font-semibold hover:underline">
-            Open Studio →
+            Open Editor →
           </Link>
         </div>
       </footer>

@@ -93,7 +93,7 @@ export const FeedbackModal: React.FC = () => {
                 Send Feedback & Report Bugs
               </h3>
               <p className="text-[11px] text-[#6F6F6A]">
-                Help us make StickerCanvas better. Every message is reviewed directly.
+                Help us make StickerCanvas better.
               </p>
             </div>
           </div>

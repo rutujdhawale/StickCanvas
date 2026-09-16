@@ -88,6 +88,8 @@ The engine code is completely decoupled from React component rendering.
 | [`src/lib/export-artwork.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/lib/export-artwork.ts) | High-resolution scene exporter. Renders visible stickers at 1×, 2×, or 4× output resolution onto an offscreen `<canvas>`, triggers download, and provides **Copy to Clipboard** via async Clipboard API. | Called by `ExportModal.tsx`. | **Renders from original asset textures at target resolution** rather than simply upscaling a 1080p canvas snapshot. Preserves source sharpness. |
 | [`src/lib/emoji-stickers.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/lib/emoji-stickers.ts) | Preset sticker library (5 categories: Cuties, Stationery, Food, Cool, Nature). Renders high-res 256px emoji stickers to PNG DataURLs. | Loaded by `AssetsPanel.tsx` and `CanvasViewport.tsx`. | Provides instant stickers out of the box so the user never starts with an empty library. |
 | [`src/lib/keyboard.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/lib/keyboard.ts) | Global keyboard shortcut listeners (Undo, Redo, Copy, Paste, Duplicate, Delete, Arrow nudging, Escape) and clipboard paste listener. | Initialized in `EditorLayout.tsx`. | **MUST ignore shortcuts when user is typing in inputs** (`<input>`, `<textarea>`, `contenteditable`). |
+| [`src/lib/server/db.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/lib/server/db.ts) | File-backed local JSON database (`/data/db.json`). Stores users, hashed passwords, reset tokens, payments, and entitlements. | Used by auth and Dodo API routes. | Atomic file writes; gitignored for privacy. |
+| [`src/lib/server/auth.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/lib/server/auth.ts) | Cryptographic password hashing and timing-safe verification using Node.js `crypto.scrypt` and `timingSafeEqual`. | Used by login/signup routes. | Constant-time password comparison prevents timing attacks. |
 | [`src/lib/utils.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/lib/utils.ts) | `cn()` helper combining `clsx` and `tailwind-merge`. | Standard UI styling utility. | — |
 
 ---
@@ -130,6 +132,8 @@ The engine code is completely decoupled from React component rendering.
 | [`src/app/api/dodo/restore/route.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/dodo/restore/route.ts) | Idempotent purchase verification and entitlement restoration endpoint. |
 | [`src/app/api/dodo/webhook/route.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/dodo/webhook/route.ts) | Webhook handler listening for Dodo payment and subscription events. |
 | [`src/app/api/proxy-image/route.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/proxy-image/route.ts) | SSRF-protected proxy downloading external image URLs for paste-by-link. |
+| [`src/app/api/auth/*`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/auth) | Backend auth routes: `signup`, `login`, `google`, `forgot-password`, `reset-password`, `me`. |
+| [`src/app/api/feedback/route.ts`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/api/feedback/route.ts) | Receives user feedback, bugs, and feature requests. |
 | [`src/app/globals.css`](file:///c:/Users/Rutuj Dhawale/Desktop/StickerCanvas/src/app/globals.css) | Tailored color system variables (`--bg`, `--ink`, `--secondary`, `--border`, `--canvas`, `--tomato`, `--blue`), paper background patterns, logo mark styles, and checkerboard utilities. |
 
 ---

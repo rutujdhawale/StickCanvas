@@ -91,7 +91,8 @@ Creating physical sticker sheets traditionally requires a tedious multi-app pipe
 - Tactile dot-grid and graph paper overlays, plus transparent checkerboard mode.
 
 ### 🔒 100% Client-Side Privacy & Zero Friction
-- **No Login Barrier**: Open the site and start creating immediately.
+- **No Login Barrier**: Open the site and start creating immediately. No account or sign-in required for designing, composing, or digital downloads.
+- **Backend Auth & Entitlements**: Light, secure file-backed database (`/data/db.json`) with scrypt password hashing, password reset tokens, and webhook-driven entitlement tracking (sign-in is only prompted during checkout or entitlement restoration).
 - **IndexedDB Auto-Persistence**: Automatically saves canvas state and uploaded assets to local browser storage with debounced writes and synchronous frame-0 cache for instant, lag-free reload.
 
 ---
